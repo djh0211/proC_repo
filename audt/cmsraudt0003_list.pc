@@ -240,7 +240,7 @@ int cmsraudt0003_list_SELECT ()
     EXEC SQL DECLARE CURS1_5000 CURSOR FOR
 		SELECT
 			/*+ FULL(A) */
-			ROWID,
+			A.ROWID,
 			CASE
 				WHEN A.DBNTR_CTGCD = 'SKT' THEN B.SGNAS_CODE
 				ELSE SUBSTR(A.TRSCP_DBNNO, 1, 1)
@@ -318,12 +318,52 @@ int cmsraudt0003_list_SELECT ()
 			return FAILURE;
         }
 
+        if (jj < 10) {
+            printf("%d 진행중....\n", jj);
+        }
+
 		l_tot_cnt++;
         if (l_tot_cnt % 100 == 0) {
 			CHRINIT(buf); common_gettime(buf,":");
 			printf ("cmsraudt0001_list_SELECT_5000=========>%6d건 진행..[%s]\n",l_tot_cnt,buf);
 			fprintf (out,"cmsraudt0001_list_SELECT_5000=========>%6d건 진행..[%s]\n",l_tot_cnt,buf);
         }
+
+
+        /*
+        <LOGIC>
+        - 아래의 수임안내 발송일 추출은 해당 채권, 혹은 해당 채권의 전환 이전 채권을 대상으로 한다.
+        - 추심을 위한 채권카드 화면에서 발송 및 영업일 경과 여부를 체크하는것은 해당 채권 수임일자 이후 최초 발송일자를 대상으로한다.
+        - 따라서 이를 위한 발송일도 채번하려한다.
+        - VCHINIT, 변수 및 배열 선언, sqlcode 대응 부탁
+        </LOGIC>
+        */
+        EXEC SQL
+            SELECT
+                POST_SNDNG_DATE, DBNNO
+            INTO
+                :hv_card_post_sndng_date,
+                :card_sndng_dbnno
+            FROM
+                (
+                SELECT
+                    POST_SNDNG_DATE, STNDY, DBNNO
+                FROM
+                    MSRURSN01MT A
+                WHERE
+                    A.DATA_STTCD = '1'
+                AND TRSCP_DVSCD = :hv_trscp_dvscd
+                AND CSTNO = :hv_cstno
+                AND STNDY >= :hv_first_acadt
+                AND INSTR_STGCD = '01'
+                AND POST_SNDNG_DATE IS NOT NULL
+                ORDER BY
+                    POST_SNDNG_DATE
+                )
+            WHERE
+                ROWNUM = 1 
+        ;
+
 
 
 /* <TO-BE> */
@@ -733,19 +773,24 @@ int cmsraudt0003_list_SELECT ()
             EXEC SQL FOR :h_update_cnt
                 UPDATE MSRAUDT01MT
                 SET WORKDT = TO_CHAR(SYSDATE, 'YYYYMMDD'),
-                    STNDY = :arr_hv_stndy,
-                    SNDNG_DATE = :arr_sndng_date,
+                    
                     CNSLT_DATE = :arr_cnslt_date,
                     CNSLT_GUBN = :arr_cnslt_gubn,
                     RECV_EMID_NAME = :arr_recv_emid_name,
                     RGYTR_RGINO = :arr_rgytr_rgino,
                     CNSLT_CNTNT = :arr_cnslt_cntnt,
                     NTYTF_RSN_CNTNT = :arr_ntytf_rsn_cntnt,
-                    SNDNG_DBNNO = :arr_sndng_dbnno,
-                    -- 추가
                     SGNAS_CODE = :arr_sgnas_code,
+                    -- 전환이전/후 채권들 중 최초 발송일
+                    SNDNG_DBNNO = :arr_sndng_dbnno,
+                    SNDNG_DATE = :arr_sndng_date,
+                    STNDY = :arr_hv_stndy,
+                    -- 전환 이전 채권 정보
                     OLD_DBNNO = :arr_old_dbnno,
-                    OLD_FIRST_ACADT = :arr_old_first_acadt
+                    OLD_FIRST_ACADT = :arr_old_first_acadt,
+                    -- 종합상담 인정
+                    CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
+                    CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno
                     
                 WHERE ROWID = :arr_rowid;
                 
@@ -774,19 +819,24 @@ int cmsraudt0003_list_SELECT ()
         EXEC SQL FOR :h_update_cnt
             UPDATE MSRAUDT01MT
             SET WORKDT = TO_CHAR(SYSDATE, 'YYYYMMDD'),
-                STNDY = :arr_hv_stndy,
-                SNDNG_DATE = :arr_sndng_date,
+                    
                 CNSLT_DATE = :arr_cnslt_date,
                 CNSLT_GUBN = :arr_cnslt_gubn,
                 RECV_EMID_NAME = :arr_recv_emid_name,
                 RGYTR_RGINO = :arr_rgytr_rgino,
                 CNSLT_CNTNT = :arr_cnslt_cntnt,
                 NTYTF_RSN_CNTNT = :arr_ntytf_rsn_cntnt,
-                SNDNG_DBNNO = :arr_sndng_dbnno,
-                -- 추가
                 SGNAS_CODE = :arr_sgnas_code,
+                -- 전환이전/후 채권들 중 최초 발송일
+                SNDNG_DBNNO = :arr_sndng_dbnno,
+                SNDNG_DATE = :arr_sndng_date,
+                STNDY = :arr_hv_stndy,
+                -- 전환 이전 채권 정보
                 OLD_DBNNO = :arr_old_dbnno,
-                OLD_FIRST_ACADT = :arr_old_first_acadt
+                OLD_FIRST_ACADT = :arr_old_first_acadt,
+                -- 종합상담 인정
+                CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
+                CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno
             WHERE ROWID = :arr_rowid;
             
         if (SQLCODE != SQL_OK) {
