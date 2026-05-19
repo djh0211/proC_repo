@@ -2,7 +2,7 @@
 /* 화  일  명 : cmsraudt0003_list.PC                                       */
 /* 작  성  일 : 2026.03.27                                                 */
 /* 관련  근거 : 금감원 자료 추출                   			            */
-/* 최종수정일 : 2026.05.14 (컴파일 오류 및 윈도우 함수 수정)                 */
+/* 최종수정일 : 2026.05.14 (3차 재수정 - 추가 컬럼 배열 변수 및 예외 처리 반영) */
 /* 작  성  자 : 하 동 준            				                        */
 /****************************************************************************/
 /* 사용테 이 블: MSRAUDT01MT,MSRCSPR01MT,MSRURSN01MT,MHREMPL01MT,MHREMPL09MT  */
@@ -27,7 +27,7 @@ static      long        l_tot_cnt;
 /*==========================================================================*/
 /*함수 프로토타입 선언                     		                            */
 /*==========================================================================*/
-int  cmsraudt0001_list_SELECT ();
+int  cmsraudt0003_list_SELECT ();
 /*==========================================================================*/
 /* 전역변수 선언( FML Buffer Pointer, HOST변수 )	                        */
 /*==========================================================================*/
@@ -96,7 +96,8 @@ static      varchar     hv_old_first_acadt  [9];
 
 static      varchar     hv_dbnno_arr	    [100][11];
 /* 채권번호 리스트				*/
-static      varchar     hv_first_acadt_arr	[100][9]; /* 수임일자 리스트				*/
+static      varchar     hv_first_acadt_arr	[100][9];
+/* 수임일자 리스트				*/
 
 /* 동적 쿼리용 변수 */
 static		varchar		sql_stmt [60000];
@@ -115,6 +116,12 @@ static		char 		arr_rgytr_rgino    [ARRAY_SIZE][35];
 static		char 		arr_ntytf_rsn_cntnt[ARRAY_SIZE][55];
 static		char 		arr_sndng_dbnno    [ARRAY_SIZE][15];
 static 		char		arr_cnslt_cntnt	   [ARRAY_SIZE][405];
+
+/* 추가된 업데이트 칼럼용 배열 호스트 변수 */
+static 		char		arr_sgnas_code	   [ARRAY_SIZE][25];
+static 		char		arr_old_dbnno      [ARRAY_SIZE][15];
+static 		char		arr_old_first_acadt[ARRAY_SIZE][10];
+
 static 		int  		h_update_cnt;  /* 실제 업데이트될 건수를 담을 호스트 변수 */
 
 /* Oracle User */
@@ -226,7 +233,8 @@ int cmsraudt0003_list_SELECT ()
 {
     /*
     <LOGIC>
-    - 컴파일 에러로 수정하였음. 임의수정 하면 안됨.
+    - 컴파일 에러로 수정하였음.
+    임의수정 하면 안됨.
     </LOGIC>
     */
     EXEC SQL DECLARE CURS1_5000 CURSOR FOR
@@ -270,8 +278,8 @@ int cmsraudt0003_list_SELECT ()
 
     for (jj=0;;jj++) {
 		VCHINIT(hv_rowid ); 
-		VCHINIT(hv_cstmr_dvscd ); 
-		VCHINIT(hv_dbntr_ctgcd ); 
+		VCHINIT(hv_cstmr_dvscd );
+        VCHINIT(hv_dbntr_ctgcd ); 
         VCHINIT(hv_dbnno  ); 
         VCHINIT(hv_cstmr_name); 
 		VCHINIT(hv_mbdb_name); 
@@ -288,8 +296,8 @@ int cmsraudt0003_list_SELECT ()
         VCHINIT(hv_recv_emid_name);
         VCHINIT(hv_rgytr_rgino); 
         VCHINIT(hv_ntytf_rsn_cntnt); 
-		VCHINIT(hv_trscp_dbnno); 
-		VCHINIT(hv_sgnas_code); 
+		VCHINIT(hv_trscp_dbnno);
+        VCHINIT(hv_sgnas_code); 
 
 		EXEC SQL FETCH CURS1_5000 INTO
 			:hv_rowid,
@@ -311,11 +319,11 @@ int cmsraudt0003_list_SELECT ()
         }
 
 		l_tot_cnt++;
-		if (l_tot_cnt % 100 == 0) {
+        if (l_tot_cnt % 100 == 0) {
 			CHRINIT(buf); common_gettime(buf,":");
 			printf ("cmsraudt0001_list_SELECT_5000=========>%6d건 진행..[%s]\n",l_tot_cnt,buf);
 			fprintf (out,"cmsraudt0001_list_SELECT_5000=========>%6d건 진행..[%s]\n",l_tot_cnt,buf);
-		}
+        }
 
 
 /* <TO-BE> */
@@ -324,14 +332,14 @@ int cmsraudt0003_list_SELECT ()
         [컴파일 에러 대응 및 윈도우 함수 제거]
         Pro*C 하위 버전에서는 인라인 뷰 내에서 분석 함수 (ROW_NUMBER() OVER) 사용 시 파싱 에러(Compilation Error)가 발생할 수 있습니다.
         이를 해결하기 위해, 인라인 뷰 내부에서 `ORDER BY`를 사용하고 바깥쪽 쿼리에서 `WHERE ROWNUM = 1`로 첫 번째 행만 추출하는 
-        표준 정적 SQL 형태로 모두 변경하였습니다. 
+        표준 정적 SQL 형태로 모두 변경하였습니다.
         또한, ORA-01405(NULL fetch) 방지를 위해 MIN 함수에 NVL 처리를 보강하였습니다.
         </LOGIC>
         */
         VCHINIT(hv_old_dbnno);
         VCHINIT(hv_old_first_acadt);
-
-		if (strcmp(hv_dbntr_ctgcd.arr, "SKT") == 0) {
+        
+        if (strcmp(hv_dbntr_ctgcd.arr, "SKT") == 0) {
 			if (strcmp(hv_sgnas_code.arr, "A3") == 0) {
 				/* 특수채권 처리 (A3) */
                 
@@ -346,8 +354,8 @@ int cmsraudt0003_list_SELECT ()
                         DBNNO,
                         ACPAP_DATE
                     INTO
-                        hv_old_dbnno,
-                        hv_old_first_acadt
+                        :hv_old_dbnno,
+                        :hv_old_first_acadt
                     FROM
                         (
                         SELECT
@@ -364,8 +372,14 @@ int cmsraudt0003_list_SELECT ()
                     WHERE
                         ROWNUM = 1
                 ;
-
-
+                
+                if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
+                    printf("MSRACCP01MT SELECT ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                    fprintf(out, "MSRACCP01MT SELECT ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                    EXEC SQL CLOSE CURS1_5000;
+                    EXEC SQL ROLLBACK;
+                    return FAILURE;
+                }
 
                 i_ck_cnt = 0;
                 VCHINIT(hv_cnslt_date);
@@ -448,7 +462,7 @@ int cmsraudt0003_list_SELECT ()
                             ORDER BY CNSLT_DATE ASC, FIRST_RGSDM ASC
                         )
                         WHERE ROWNUM = 1;
-
+                        
                     if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
                         printf("MSRCSPR01MT ROWNUM=1 ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
                         EXEC SQL CLOSE CURS1_5000;
@@ -470,7 +484,7 @@ int cmsraudt0003_list_SELECT ()
                     EXEC SQL
                         SELECT TRIM(SUBSTR(RGYTR_RGINO,1,12)) INTO :hv_rgytr_rgino
                         FROM MHREMPL09MT WHERE EMINO = :hv_recv_emid;
-
+                        
                     if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
                         printf("MHREMPL09MT ERROR [%d][%s]\n", SQLCODE, SQLERRM);
                         EXEC SQL CLOSE CURS1_5000; return FAILURE;
@@ -482,7 +496,7 @@ int cmsraudt0003_list_SELECT ()
                 VCHINIT(hv_sndng_dbnno);
                 
                 EXEC SQL
-                    SELECT DBNNO, POST_SNDNG_DATE, STNDY
+                    SELECT DBNNO, NVL(POST_SNDNG_DATE, ' '), NVL(STNDY, ' ')
                     INTO :hv_sndng_dbnno, :hv_sndng_date, :hv_stndy
                     FROM (	
                         SELECT DBNNO, POST_SNDNG_DATE, STNDY
@@ -502,7 +516,7 @@ int cmsraudt0003_list_SELECT ()
                         ORDER BY FIRST_RGSDM ASC
                     )
                     WHERE ROWNUM = 1;
-
+                    
                 if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
                     printf("MSRURSN01MT ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
                     EXEC SQL CLOSE CURS1_5000;
@@ -532,7 +546,7 @@ int cmsraudt0003_list_SELECT ()
                           AND A.PRMAM = 0)
                       AND RTRN_CODE IS NULL
                       AND NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%');
-
+                      
                 if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
                     printf("MSRCSPR01MT COUNT/MIN (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
                     EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
@@ -574,7 +588,7 @@ int cmsraudt0003_list_SELECT ()
                             ORDER BY CNSLT_DATE ASC, FIRST_RGSDM ASC
                         )
                         WHERE ROWNUM = 1;
-
+                        
                     if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
                         printf("MSRCSPR01MT ROWNUM=1 (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
                         EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
@@ -606,7 +620,7 @@ int cmsraudt0003_list_SELECT ()
                 VCHINIT(hv_sndng_dbnno);
                 
                 EXEC SQL
-                    SELECT DBNNO, POST_SNDNG_DATE, STNDY
+                    SELECT DBNNO, NVL(POST_SNDNG_DATE, ' '), NVL(STNDY, ' ')
                     INTO :hv_sndng_dbnno, :hv_sndng_date, :hv_stndy
                     FROM (	
                         SELECT DBNNO, POST_SNDNG_DATE, STNDY
@@ -620,7 +634,7 @@ int cmsraudt0003_list_SELECT ()
                         ORDER BY FIRST_RGSDM ASC
                     )
                     WHERE ROWNUM = 1;
-
+                    
                 if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
                     printf("MSRURSN01MT (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
                     EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
@@ -632,9 +646,9 @@ int cmsraudt0003_list_SELECT ()
         /*===============================================================*/
         /* 6.미발송사유													 */
         /*===============================================================*/
-        VCHINIT(hv_ntytf_rsn_cntnt);                 
+        VCHINIT(hv_ntytf_rsn_cntnt);
         EXEC SQL			
-            SELECT replace(replace(CNSLT_CNTNT,CHR(10),''),chr(13),'')
+            SELECT NVL(replace(replace(CNSLT_CNTNT,CHR(10),''),chr(13),''), ' ')
             INTO :hv_ntytf_rsn_cntnt
             FROM (
                 SELECT CNSLT_CNTNT
@@ -694,6 +708,16 @@ int cmsraudt0003_list_SELECT ()
 
         memset(arr_cnslt_cntnt[arr_idx], 0x00, 405);
         strncpy(arr_cnslt_cntnt[arr_idx], (char *)hv_cnslt_cntnt.arr, hv_cnslt_cntnt.len);
+        
+        /* [추가] 새로운 업데이트 칼럼 3개에 대한 배열 복사 처리 */
+        memset(arr_sgnas_code[arr_idx], 0x00, 25);
+        strncpy(arr_sgnas_code[arr_idx], (char *)hv_sgnas_code.arr, hv_sgnas_code.len);
+        
+        memset(arr_old_dbnno[arr_idx], 0x00, 15);
+        strncpy(arr_old_dbnno[arr_idx], (char *)hv_old_dbnno.arr, hv_old_dbnno.len);
+        
+        memset(arr_old_first_acadt[arr_idx], 0x00, 10);
+        strncpy(arr_old_first_acadt[arr_idx], (char *)hv_old_first_acadt.arr, hv_old_first_acadt.len);
 
         arr_idx++;
         if (arr_idx == ARRAY_SIZE) {
@@ -701,7 +725,8 @@ int cmsraudt0003_list_SELECT ()
             /* FOR 구문을 사용하여 5000건을 단 1번의 쿼리로 UPDATE */
             /*
             <LOGIC>
-            - 업데이트 칼럼 추가. 추가된 칼럼을 임의로 삭제하면 안됨
+            - 업데이트 칼럼 추가.
+            추가된 칼럼을 임의로 삭제하면 안됨
             - 또한 미존재시 너가 자동으로 배열 및 개별 바인딩 변수 생성해줘야함.
             </LOGIC>
             */
@@ -723,7 +748,7 @@ int cmsraudt0003_list_SELECT ()
                     OLD_FIRST_ACADT = :arr_old_first_acadt
                     
                 WHERE ROWID = :arr_rowid;
-
+                
             if (SQLCODE != SQL_OK) {
                 printf("MSRAUDT01MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
                 fprintf(out,"MSRCRDT03MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
@@ -739,7 +764,8 @@ int cmsraudt0003_list_SELECT ()
     /* 남은 자투리 데이터가 있다면 마지막 일괄 UPDATE 수행 */
     /*
     <LOGIC>
-    - 업데이트 칼럼 추가. 추가된 칼럼을 임의로 삭제하면 안됨
+    - 업데이트 칼럼 추가.
+    추가된 칼럼을 임의로 삭제하면 안됨
     - 또한 미존재시 너가 자동으로 배열 및 개별 바인딩 변수 생성해줘야함.
     </LOGIC>
     */
@@ -762,7 +788,7 @@ int cmsraudt0003_list_SELECT ()
                 OLD_DBNNO = :arr_old_dbnno,
                 OLD_FIRST_ACADT = :arr_old_first_acadt
             WHERE ROWID = :arr_rowid;
-
+            
         if (SQLCODE != SQL_OK) {
             printf("MSRAUDT01MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
             fprintf(out,"MSRCRDT03MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
