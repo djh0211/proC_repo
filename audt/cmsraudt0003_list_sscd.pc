@@ -93,9 +93,6 @@ static 		varchar		hv_old_sgnas_code  [21];
 /* SKT 채권 종류 A3:특수 */
 static      varchar     hv_old_first_acadt  [9];
 /* 수임일자					*/
-static      varchar     hv_bigo_03  [401];
-/* 비고03 */
-
 
 /* [신규 추가] 채권카드 화면용 수임안내 발송일 및 대상 채권번호 */
 static      varchar     hv_card_post_sndng_date [9];
@@ -278,9 +275,6 @@ int cmsraudt0003_list_SELECT ()
 		AND A.DBNTR_CTGCD IN ('SKT')
         AND A.DBNNO = B.DBNNO(+)
         AND B.DATA_STTCD(+) = '1'
-        -- 추가1회성(SGNAS_CODE NULL도 특수가능성있음)
-        AND A.SGNAS_CODE IS NULL
-        --AND ROWNUM < 500
 	;
 
     EXEC SQL OPEN CURS1_5000;
@@ -403,8 +397,7 @@ int cmsraudt0003_list_SELECT ()
         VCHINIT(hv_old_first_acadt);
 
 		if (strcmp(hv_dbntr_ctgcd.arr, "SKT") == 0) {
-			if (strcmp(hv_sgnas_code.arr, "A3") == 0 ||
-                strcmp(hv_sgnas_code.arr, "") == 0) {
+			if (strcmp(hv_sgnas_code.arr, "A3") == 0) {
 				/* 특수채권 처리 (A3) */
                 
                 /*
@@ -445,22 +438,11 @@ int cmsraudt0003_list_SELECT ()
                     return FAILURE;
                 }
 
-                /*
-                <LOGIC>
-                - if 절 안에서만 초기화하여 이전에 담겨있는 값을 update 치는 현상 발생.
-                </LOGIC>
-                */
                 i_ck_cnt = 0;
                 VCHINIT(hv_cnslt_date);
-                VCHINIT(hv_cnslt_gubn);
-                VCHINIT(hv_recv_emid);
-                VCHINIT(hv_cnslt_cntnt);
-                VCHINIT(hv_recv_emid_name);
-                VCHINIT(hv_rgytr_rgino);
-
                 
                 EXEC SQL            
-                    SELECT COUNT(*), MIN(CNSLT_DATE)
+                    SELECT COUNT(*), NVL(MIN(CNSLT_DATE), ' ')
                     INTO :i_ck_cnt, :hv_cnslt_date
                     FROM MSRCSPR01MT A
                     WHERE TRSCP_DVSCD = :hv_trscp_dvscd
@@ -494,6 +476,9 @@ int cmsraudt0003_list_SELECT ()
                 }
 
                 if (i_ck_cnt > 0) {
+                    VCHINIT(hv_cnslt_gubn);
+                    VCHINIT(hv_recv_emid);
+                    VCHINIT(hv_cnslt_cntnt);
 
                     /* 윈도우 함수(ROW_NUMBER) 대신 ORDER BY + ROWNUM = 1 로 우회 */
                     EXEC SQL
@@ -596,75 +581,13 @@ int cmsraudt0003_list_SELECT ()
                     return FAILURE;
                 }
 
-
-                /*
-                <LOGIC>
-                - 전환 이전, 현재 채권 다 수임안내문 보낸 이력이 미발견됨.
-                - 저 두 채권의 동일 수임일자의 동일 채무자 채권 존재시 하나만 보냈을 수 있음.
-                - 따라서 수임안내문을 보낸 그 채권을 찾아야 함.
-                - SQLCODE, VCHINIT 등 작성 요망
-                </LOGIC>
-                */
-                if (strcmp(hv_sndng_date.arr, "") == 0) {
-
-                    EXEC SQL
-                        SELECT
-                            -- 없으면 비우고, 있으면 아래 양식으로
-                            DECODE(MIN(UR.POST_SNDNG_DATE), NULL, NULL,
-                                MIN('발송일: '||UR.POST_SNDNG_DATE||' 발송채권번호: '||UR.DBNNO||' 동일수임일자채권번호'||AC1.DBNNO))
-                        INTO
-                            :hv_bigo_03
-                        FROM
-                            MSRACCP01MT AC1,
-                            MSRACCP02MT AC2,
-                            MSRURSN01MT UR
-                        WHERE
-                            AC1.DATA_STTCD = '1'
-                            -- 전환 이전/이후 채권 리스트
-                            AND AC1.DBNNO IN 
-                                (
-                                SELECT DBNNO 
-                                FROM MSRACCP01MT 
-                                WHERE DATA_STTCD = '1' 
-                                    AND CMISS_DVSCD != 'A3' 
-                                    AND SRVC_MNGNO = :hv_trscp_dbnno
-                                UNION ALL
-                                SELECT :hv_dbnno FROM DUAL
-                                )
-                            AND AC2.DATA_STTCD = '1'
-                            AND AC2.CSTNO = AC1.CSTNO -- 동일 채무자의
-                            AND AC2.ACPAP_DATE = AC1.ACPAP_DATE -- 동일 수임일자의
-                            AND UR.DATA_STTCD = '1'
-                            AND UR.POST_SNDNG_DATE IS NOT NULL
-                            AND UR.INSTR_STGCD = '01' -- 수임안내문
-                            AND UR.DBNNO = AC2.DBNNO -- 동일채무자의 동일수임일자의 모든 채권들로
-                            AND UR.CSTNO = :hv_cstno -- ACCP의 채무자가 아니라 위의 CSTNO로
-                    ;
-
-
-                }
-
-
-
-
-
 			} else {
                 /* 일반 SKT 채권 처리 */
-                /*
-                <LOGIC>
-                - if 절 안에서만 초기화하여 이전에 담겨있는 값을 update 치는 현상 발생.
-                </LOGIC>
-                */
                 i_ck_cnt = 0;
                 VCHINIT(hv_cnslt_date);
-                VCHINIT(hv_cnslt_gubn);
-                VCHINIT(hv_recv_emid);
-                VCHINIT(hv_cnslt_cntnt);
-                VCHINIT(hv_recv_emid_name);
-                VCHINIT(hv_rgytr_rgino);
                 
                 EXEC SQL            
-                    SELECT COUNT(*), MIN(CNSLT_DATE)
+                    SELECT COUNT(*), NVL(MIN(CNSLT_DATE), ' ')
                     INTO :i_ck_cnt, :hv_cnslt_date
                     FROM MSRCSPR01MT A
                     WHERE TRSCP_DVSCD = :hv_trscp_dvscd
@@ -687,6 +610,9 @@ int cmsraudt0003_list_SELECT ()
                 }
 
                 if (i_ck_cnt > 0) {
+                    VCHINIT(hv_cnslt_gubn);
+                    VCHINIT(hv_recv_emid);
+                    VCHINIT(hv_cnslt_cntnt);
 
                     /* 윈도우 함수 제거 후 ORDER BY + ROWNUM=1 로 수정 */
                     EXEC SQL
@@ -770,45 +696,6 @@ int cmsraudt0003_list_SELECT ()
                     printf("MSRURSN01MT (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
                     EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
                 }
-
-
-                /*
-                <LOGIC>
-                - 전환 이전, 현재 채권 다 수임안내문 보낸 이력이 미발견됨.
-                - 저 두 채권의 동일 수임일자의 동일 채무자 채권 존재시 하나만 보냈을 수 있음.
-                - 따라서 수임안내문을 보낸 그 채권을 찾아야 함.
-                - SQLCODE, VCHINIT 등 작성 요망
-                </LOGIC>
-                */
-                if (strcmp(hv_sndng_date.arr, "") == 0) {
-
-                    EXEC SQL
-                        SELECT
-                            -- 없으면 비우고, 있으면 아래 양식으로
-                            DECODE(MIN(UR.POST_SNDNG_DATE), NULL, NULL,
-                                MIN('발송일: '||UR.POST_SNDNG_DATE||' 발송채권번호: '||UR.DBNNO||' 동일수임일자채권번호'||AC1.DBNNO))
-                        INTO
-                            :hv_bigo_03
-                        FROM
-                            MSRACCP01MT AC1,
-                            MSRACCP02MT AC2,
-                            MSRURSN01MT UR
-                        WHERE
-                            AC1.DATA_STTCD = '1'
-                            AND AC1.DBNNO = :hv_dbnno
-                            AND AC2.DATA_STTCD = '1'
-                            AND AC2.CSTNO = AC1.CSTNO -- 동일 채무자의
-                            AND AC2.ACPAP_DATE = AC1.ACPAP_DATE -- 동일 수임일자의
-                            AND UR.DATA_STTCD = '1'
-                            AND UR.POST_SNDNG_DATE IS NOT NULL
-                            AND UR.INSTR_STGCD = '01' -- 수임안내문
-                            AND UR.DBNNO = AC2.DBNNO -- 동일채무자의 동일수임일자의 모든 채권들로
-                            AND UR.CSTNO = :hv_cstno -- ACCP의 채무자가 아니라 위의 CSTNO로
-                    ;
-
-
-                }
-
             }
 		}
 /* </TO-BE> */
@@ -920,9 +807,7 @@ int cmsraudt0003_list_SELECT ()
                     OLD_FIRST_ACADT = :arr_old_first_acadt,
                     -- 종합상담 인정
                     CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
-                    CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno,
-                    -- 발송일자 못찾으면 동일 수임일자 발송내역 불러와.
-                    BIGO_03 = :arr_hv_bigo_03
+                    CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno
                     
                 WHERE ROWID = :arr_rowid;
                 
@@ -962,8 +847,6 @@ int cmsraudt0003_list_SELECT ()
                 -- 종합상담 인정
                 CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
                 CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno
-                -- 발송일자 못찾으면 동일 수임일자 발송내역 불러와.
-                BIGO_03 = :arr_hv_bigo_03
             WHERE ROWID = :arr_rowid;
 
         if (SQLCODE != SQL_OK) {
