@@ -1,16 +1,16 @@
 /*==========================================================================*/
 /* 화  일  명 : cmsraudt0003_list.PC                                       */
 /* 작  성  일 : 2026.03.27                                                 */
-/* 관련  근거 : 금감원 자료 추출                   			            */
-/* 최종수정일 : 2026.05.14 (4차 재수정 - 채권카드 화면 기준 발송일 로직 추가 반영) */
-/* 작  성  자 : 하 동 준            				                        */
+/* 관련  근거 : 금감원 자료 추출                                           */
+/* 최종수정일 : 2026.05.22 (최종 보완 - BIGO_02/03 STNDY 배열 및 예외처리 보강)*/
+/* 작  성  자 : 하 동 준                                                   */
 /****************************************************************************/
-/* 사용테 이 블: MSRAUDT01MT,MSRCSPR01MT,MSRURSN01MT,MHREMPL01MT,MHREMPL09MT  */
-/* 사용공통모듈:                                                            */
+/* 사용테이블 : MSRAUDT01MT, MSRCSPR01MT, MSRURSN01MT, MHREMPL01MT,        */
+/* MHREMPL09MT, MSRCRDT01VT, MSRACCP01MT                      */
 /****************************************************************************/
 #include <stdio.h>
 #include <stdlib.h>
-/*#include <macros.h>*/
+#include <string.h>
 #include <macro.h>
 
 #include "xdsp_type.h"
@@ -22,16 +22,17 @@
 
 #define ARRAY_SIZE 5000  /* 한 번에 업데이트할 건수 */
 
-
 static      long        l_tot_cnt;
+
 /*==========================================================================*/
-/*함수 프로토타입 선언                     		                            */
+/* 함수 프로토타입 선언                                                     */
 /*==========================================================================*/
 int  cmsraudt0003_list_SELECT ();
+
 /*==========================================================================*/
-/* 전역변수 선언( FML Buffer Pointer, HOST변수 )	                        */
+/* 전역변수 선언( FML Buffer Pointer, HOST변수 )                            */
 /*==========================================================================*/
-static		FILE		*out,*o_fp;
+static		FILE		*out, *o_fp;
 char	c_commands [124];
 
 EXEC SQL BEGIN     DECLARE SECTION ;
@@ -39,84 +40,52 @@ EXEC SQL BEGIN     DECLARE SECTION ;
 static      varchar     hv_stml_date      [9];
 static      varchar     hv_gubun		  [3];
 static      varchar     hv_rgsdt		  [9];
-static      varchar     hv_rowid	      [51];
-/* ROWID			*/
-static      varchar     hv_cstmr_dvscd	  [11];
-/* 개인/법인구분			*/
-static      varchar     hv_dbntr_ctgcd	  [11];
-/* 채권종류					*/
-static      varchar     hv_dbnno          [11];
-/* 채권번호                 */
-static      varchar     hv_sndng_dbnno    [11];
-/* 수임안내문나간채권번호                 */
-static      varchar     hv_cstmr_name     [41];
-/* 성명						*/
-static      varchar     hv_mbdb_name      [41];
-/* 주채무자명	  			*/
-static      varchar     hv_dbtr_rltname   [4];
-/* 관계구분	  			*/
-static      varchar     hv_first_acadt    [9];
-/* 수임일자					*/
-static      varchar     hv_sndng_date     [9];
-/* 채권수임안내문발송일자	*/
-static      varchar     hv_cnslt_date     [9];
-/* 최초추심활동일자	        */
-static      varchar     hv_stndy     	  [9];
-/* 최초추심활동일자	        */
-static      varchar     hv_cnslt_gubn     [21];
-/* 최초추심활동방법	        */
-static      varchar     hv_recv_emid      [8];
-/* 담당자사번				*/
-static      varchar     hv_recv_emid_name [21];
-/* 담당자명					*/
-static      varchar     hv_rgytr_rgino    [31];
-/* 담당 협회등록번호(2012.05. kjy)	*/
-static      varchar     hv_cstno          [11];
-/* 고객번호-참고항목                 */
-static      varchar     hv_fnsdt          [9];
-/* 완결일자-참고항목                 */
-static      varchar     hv_fnsh_dvscd     [3];
-/* 완결구분-참고항목                 */
-static      varchar		hv_ntytf_rsn_cntnt [51];
-/*미발송사유-참고항목               */
-static      varchar     hv_trscp_dvscd     [5];
-/*위임사-참고항목                   */
-static      varchar     hv_del_yn     	   [2];
-/*보증인삭제여부-참고항목           */
-static 		varchar		hv_cnslt_cntnt	  [401];
-static      varchar     hv_trscp_dbnno     [41];
-/* 위임사채권번호						*/
-static 		varchar		hv_sgnas_code	   [21]; /* SKT 채권 종류 A3:특수 */
-static      varchar     hv_old_dbnno       [11];
-/* 채권번호                 */
+static      varchar     hv_rowid	      [51];     /* ROWID */
+static      varchar     hv_cstmr_dvscd	  [11];     /* 개인/법인구분 */
+static      varchar     hv_dbntr_ctgcd	  [11];     /* 채권종류 */
+static      varchar     hv_dbnno          [11];     /* 채권번호 */
+static      varchar     hv_sndng_dbnno    [11];     /* 수임안내문나간채권번호 */
+static      varchar     hv_cstmr_name     [41];     /* 성명 */
+static      varchar     hv_mbdb_name      [41];     /* 주채무자명 */
+static      varchar     hv_dbtr_rltname   [4];      /* 관계구분 */
+static      varchar     hv_first_acadt    [9];      /* 수임일자 */
+static      varchar     hv_sndng_date     [9];      /* 채권수임안내문발송일자 */
+static      varchar     hv_cnslt_date     [9];      /* 최초추심활동일자 */
+static      varchar     hv_stndy     	  [9];      /* 최초추심활동일자 기준일 */
+static      varchar     hv_cnslt_gubn     [21];     /* 최초추심활동방법 */
+static      varchar     hv_recv_emid      [8];      /* 담당자사번 */
+static      varchar     hv_recv_emid_name [21];     /* 담당자명 */
+static      varchar     hv_rgytr_rgino    [31];     /* 담당 협회등록번호 */
+static      varchar     hv_cstno          [11];     /* 고객번호-참고항목 */
+static      varchar     hv_fnsdt          [9];      /* 완결일자-참고항목 */
+static      varchar     hv_fnsh_dvscd     [3];      /* 완결구분-참고항목 */
+static      varchar		hv_ntytf_rsn_cntnt [51];    /* 미발송사유-참고항목 */
+static      varchar     hv_trscp_dvscd     [5];      /* 위임사-참고항목 */
+static      varchar     hv_del_yn     	   [2];      /* 보증인삭제여부-참고항목 */
+static 		varchar		hv_cnslt_cntnt	  [401];    /* 상담내용 */
+static      varchar     hv_trscp_dbnno     [41];     /* 위임사채권번호 */
+static 		varchar		hv_sgnas_code	   [21];     /* SKT 채권 종류 A3:특수 */
+static      varchar     hv_old_dbnno       [11];     /* 전환전 채권번호 */
 static 		varchar		hv_old_sgnas_code  [21];
-/* SKT 채권 종류 A3:특수 */
-static      varchar     hv_old_first_acadt  [9];
-/* 수임일자					*/
-static      varchar     hv_bigo_03  [401];
-/* 비고03 */
+static      varchar     hv_old_first_acadt  [9];     /* 전환전 수임일자 */
+static      varchar     hv_bigo_03         [401];    /* 비고03 */
+static      varchar     hv_bigo_03_dt      [9];      /* 비고03 날짜 */
+static      varchar     hv_bigo_02_dt      [9];      /* 비고02 날짜 */
+static      varchar     hv_bigo_02_stndy   [9];      /* 비고02 기준일 (추가) */
+static      varchar     hv_bigo_03_stndy   [9];      /* 비고03 기준일 (추가) */
 
-
-/* [신규 추가] 채권카드 화면용 수임안내 발송일 및 대상 채권번호 */
+/* 채권카드 화면용 수임안내 발송일, 대상 채권번호, 최초 발송 기준일 */
 static      varchar     hv_card_post_sndng_date [9];
 static      varchar     hv_card_sndng_dbnno     [11];
-
+static      varchar     hv_card_stndy           [9];    /* <LOGIC> 신규 추가 */
 static      varchar     hv_dbnno_arr	    [100][11];
-/* 채권번호 리스트				*/
 static      varchar     hv_first_acadt_arr	[100][9];
-/* 수임일자 리스트				*/
 
-/* 동적 쿼리용 변수 */
-static		varchar		sql_stmt [60000];
-static		varchar		sql_stmt2 [60000];
-static		varchar		sql_stmt_skt1 [60000];
-static		char		in_clause_skt1 [3000];
-
-/* 일괄 UPDATE를 위한 배열 호스트 변수 선언 (넉넉하게 사이즈 할당) */
+/* 일괄 UPDATE를 위한 배열 호스트 변수 선언 */
 static		char 		arr_rowid          [ARRAY_SIZE][51];
 static		char 		arr_sndng_date     [ARRAY_SIZE][10];
 static		char 		arr_cnslt_date     [ARRAY_SIZE][10];
-static		char 		arr_hv_stndy     [ARRAY_SIZE][10];
+static		char 		arr_hv_stndy       [ARRAY_SIZE][10];
 static		char 		arr_cnslt_gubn     [ARRAY_SIZE][25];
 static		char 		arr_recv_emid_name [ARRAY_SIZE][25];
 static		char 		arr_rgytr_rgino    [ARRAY_SIZE][35];
@@ -124,49 +93,55 @@ static		char 		arr_ntytf_rsn_cntnt[ARRAY_SIZE][55];
 static		char 		arr_sndng_dbnno    [ARRAY_SIZE][15];
 static 		char		arr_cnslt_cntnt	   [ARRAY_SIZE][405];
 
-/* 추가된 업데이트 칼럼용 배열 호스트 변수 */
+/* 추가 업데이트 칼럼용 배열 호스트 변수 */
 static 		char		arr_sgnas_code	   [ARRAY_SIZE][25];
 static 		char		arr_old_dbnno      [ARRAY_SIZE][15];
 static 		char		arr_old_first_acadt[ARRAY_SIZE][10];
 
-/* [신규 추가] 배열 변수 */
+/* 채권카드 및 비고용 배열 변수 */
 static 		char		arr_card_post_sndng_date[ARRAY_SIZE][10];
 static 		char		arr_card_sndng_dbnno    [ARRAY_SIZE][15];
+static 		char		arr_card_stndy          [ARRAY_SIZE][10];  /* <LOGIC> 신규 추가 */
+static 		char		arr_hv_bigo_03     [ARRAY_SIZE][405];
+static 		char		arr_hv_bigo_03_dt  [ARRAY_SIZE][10];
+static 		char		arr_hv_bigo_03_stndy[ARRAY_SIZE][10];  
+static 		char		arr_hv_bigo_02_dt  [ARRAY_SIZE][10];
+static 		char		arr_hv_bigo_02_stndy[ARRAY_SIZE][10];  
 
-static 		int  		h_update_cnt;  /* 실제 업데이트될 건수를 담을 호스트 변수 */
+static 		int  		h_update_cnt;  /* 실제 업데이트될 건수 */
 
-/* Oracle User */
-static varchar hv_userid    [20];
-static varchar hv_passwd    [20];
+/* Oracle User/Passwd */
+static      varchar     hv_userid    [20];
+static      varchar     hv_passwd    [20];
 
 EXEC SQL    END         DECLARE SECTION ;
 
-int   i_sequ[40001],Main_rtn;
+int   i_sequ[40001], Main_rtn;
 char  buf[21];
 char  c_buffer[1001];
-int   tot_scan,tot_fnsh,tot_zip_fail,tot_3,tot_0,tot_insert,rtn,ii,t_cust_cnt,
-	  t_stml_cnt,jj,dm_cnt,hm_cnt, ps_cnt,hd_cnt, kk ;
-int   i_ck_cnt=0;
+int   tot_scan, tot_fnsh, tot_zip_fail, tot_3, tot_0, tot_insert, rtn, ii, t_cust_cnt,
+	  t_stml_cnt, jj, dm_cnt, hm_cnt, ps_cnt, hd_cnt, kk;
+int   i_ck_cnt = 0;
 int	  arr_idx = 0;
 
 EXEC SQL    INCLUDE     sqlca.h ;
 
 /*==========================================================================*/
-/* 서비스 Main Process 함수                                        */
+/* 서비스 Main Process 함수                                                 */
 /*==========================================================================*/
-void main (int argc,char *argv[])
+void main (int argc, char *argv[])
 {
-    if (ora_init() ==  FAILURE) {
-        printf("cmsraudt0003_list-CONNECT ERROR [%d][%s] \n", SQLCODE, SQLERRM );
-        exit (-1) ;
+    if (ora_init() == FAILURE) {
+        printf("cmsraudt0003_list-CONNECT ERROR [%d][%s] \n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        exit (-1);
     }
 
     if (argc == 3) {
         VCHINIT(hv_gubun);
-        STR2VCH(hv_gubun,argv[1]);
+        STR2VCH(hv_gubun, argv[1]);
 
 		VCHINIT(hv_rgsdt);
-        STR2VCH(hv_rgsdt,argv[2]);
+        STR2VCH(hv_rgsdt, argv[2]);
 
         if (hv_gubun.len != 2) {
             printf("/*==================================================*/\n");
@@ -180,74 +155,66 @@ void main (int argc,char *argv[])
             printf("/*==================================================*/\n");
             exit(-1);
         }
-        if ((strcmp(hv_gubun.arr , "01") != 0) &&
-            (strcmp(hv_gubun.arr , "02") != 0) &&
-            (strcmp(hv_gubun.arr , "03") != 0)) {
+        if ((strcmp(hv_gubun.arr, "01") != 0) &&
+            (strcmp(hv_gubun.arr, "02") != 0) &&
+            (strcmp(hv_gubun.arr, "03") != 0)) {
             printf("/*=========================================================*/\n");
-            printf("/* Ex) 인자값을 확인하세요                                */\n");
-            printf("/* [01:]      */\n");
+            printf("/* Ex) 인자값을 확인하세요                                 */\n");
+            printf("/* [01: 정상 수행]                                         */\n");
             printf("/*=========================================================*/\n");
             exit(-1);
         }
-
     }
     else {
         printf("/*==================================================*/\n");
-        printf("/* Ex) cmsraudt0003_list 01                       */\n");
+        printf("/* Ex) cmsraudt0003_list 01 20260327               */\n");
         printf("/*==================================================*/\n");
         exit(-1);
     }
 
-	memset(c_commands , 0x00, sizeof(c_commands));
-	strcat(c_commands, "audit/cmsraudt0003_list.log");
+	memset(c_commands, 0x00, sizeof(c_commands));
+	strcpy(c_commands, "audit/cmsraudt0003_list.log");
 
-    if ((out = fopen(c_commands,"a")) == NULL) {
+    if ((out = fopen(c_commands, "a")) == NULL) {
         printf("LOG FILE OPEN ERROR\n");
         exit(-1);
     }
 
 	VCHINIT(hv_stml_date);
     EXEC SQL
-        SELECT TO_CHAR(SYSDATE,'yyyymmdd')
+        SELECT TO_CHAR(SYSDATE, 'yyyymmdd')
         INTO   :hv_stml_date
         FROM   DUAL;
         
-    CHRINIT(buf); common_gettime(buf,":");
-	printf ("\n\n",hv_stml_date.arr,buf);
-    fprintf (out,"\n\n",hv_stml_date.arr,buf);
-    printf ("금감원 자료 추출 START : [%s][%s]\n",hv_stml_date.arr,buf);
-    fprintf (out,"금감원 자료 추출 START : [%s][%s]\n",hv_stml_date.arr,buf);
-    
+	CHRINIT(buf); common_gettime(buf, ":");
+	printf ("\n\n");
+    fprintf (out, "\n\n");
+    printf ("금감원 자료 추출 START : [%s][%s]\n", hv_stml_date.arr, buf);
+    fprintf (out, "금감원 자료 추출 START : [%s][%s]\n", hv_stml_date.arr, buf);
+
     if (strcmp(hv_gubun.arr, "01") == 0) {
     	if (cmsraudt0003_list_SELECT () == FAILURE) {
 			EXEC SQL ROLLBACK;
         	fclose(out);
-            exit (-1) ;
+            exit (-1);
     	} 
 	}
 
-	CHRINIT(buf); common_gettime(buf,":");
-    printf ("금감원 자료 추출 END : [%s][%s]\n",hv_stml_date.arr,buf);
-    fprintf (out,"금감원 자료 추출 END : [%s][%s]\n",hv_stml_date.arr,buf);
+	CHRINIT(buf); common_gettime(buf, ":");
+    printf ("금감원 자료 추출 END : [%s][%s]\n", hv_stml_date.arr, buf);
+    fprintf (out, "금감원 자료 추출 END : [%s][%s]\n", hv_stml_date.arr, buf);
     
-    EXEC SQL COMMIT;
+	EXEC SQL COMMIT;
 
 	fclose(out);
     exit (0);
 }
 
-
 /*==========================================================================*/
-/* 함 수 명 : int cmsraudt0003_list_SELECT()        					*/
+/* 함 수 명 : int cmsraudt0003_list_SELECT()                                */
 /*==========================================================================*/
 int cmsraudt0003_list_SELECT ()
 {
-    /*
-    <LOGIC>
-    - 컴파일 에러로 수정하였음.
-    임의수정 하면 안됨.
-    </LOGIC>
-    */
     EXEC SQL DECLARE CURS1_5000 CURSOR FOR
 		SELECT
 			/*+ FULL(A) */
@@ -255,7 +222,7 @@ int cmsraudt0003_list_SELECT ()
 			CASE
 				WHEN A.DBNTR_CTGCD = 'SKT' THEN B.SGNAS_CODE
 				ELSE SUBSTR(A.TRSCP_DBNNO, 1, 1)
-			END SGNAS_CODE, /* 채권종류코드 A3 등 */
+			END SGNAS_CODE, 
 			A.CSTMR_DVSCD,
 			A.DBNTR_CTGCD,
 			A.CSTNO,
@@ -274,27 +241,24 @@ int cmsraudt0003_list_SELECT ()
 		WHERE
 			A.FIRST_RGSDM >= TO_DATE(:hv_rgsdt, 'YYYYMMDD')
 		AND A.FIRST_RGSDM <  TO_DATE(:hv_rgsdt, 'YYYYMMDD') + 1
-		AND A.WORKDT IS NULL
 		AND A.DBNTR_CTGCD IN ('SKT')
         AND A.DBNNO = B.DBNNO(+)
         AND B.DATA_STTCD(+) = '1'
-        -- 추가1회성(SGNAS_CODE NULL도 특수가능성있음)
-        AND A.SGNAS_CODE IS NULL
-        --AND ROWNUM < 500
+        --AND A.SNDNG_DATE IS NULL
 	;
 
     EXEC SQL OPEN CURS1_5000;
-    if (SQLCODE != SQL_OK) {
-        printf("CURS1_5000 OPEN ERROR [%d][%s]\n", SQLCODE, SQLERRM);
-        fprintf(out, "CURS1_5000 OPEN ERROR [%d][%s]\n", SQLCODE, SQLERRM);
+	if (sqlca.sqlcode != 0) {
+        printf("CURS1_5000 OPEN ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+        fprintf(out, "CURS1_5000 OPEN ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
         return FAILURE;
     }
 
     for (jj=0;;jj++) {
-		VCHINIT(hv_rowid ); 
-		VCHINIT(hv_cstmr_dvscd );
-        VCHINIT(hv_dbntr_ctgcd ); 
-        VCHINIT(hv_dbnno  ); 
+		VCHINIT(hv_rowid); 
+		VCHINIT(hv_cstmr_dvscd);
+		VCHINIT(hv_dbntr_ctgcd); 
+        VCHINIT(hv_dbnno); 
         VCHINIT(hv_cstmr_name); 
 		VCHINIT(hv_mbdb_name); 
 		VCHINIT(hv_first_acadt); 
@@ -306,12 +270,25 @@ int cmsraudt0003_list_SELECT ()
 		
         VCHINIT(hv_sndng_date); 
         VCHINIT(hv_cnslt_date); 
+        VCHINIT(hv_stndy);
         VCHINIT(hv_cnslt_gubn); 
         VCHINIT(hv_recv_emid_name);
         VCHINIT(hv_rgytr_rgino); 
         VCHINIT(hv_ntytf_rsn_cntnt); 
 		VCHINIT(hv_trscp_dbnno);
-        VCHINIT(hv_sgnas_code); 
+		VCHINIT(hv_sgnas_code); 
+        
+        VCHINIT(hv_bigo_03);
+        VCHINIT(hv_bigo_03_dt);
+        VCHINIT(hv_bigo_03_stndy);
+        VCHINIT(hv_bigo_02_dt);
+        VCHINIT(hv_bigo_02_stndy);
+
+        VCHINIT(hv_card_post_sndng_date);
+        VCHINIT(hv_card_sndng_dbnno);
+        VCHINIT(hv_card_stndy);     /* <LOGIC> 초기화 추가 */
+        VCHINIT(hv_old_dbnno);
+        VCHINIT(hv_old_first_acadt);
 
 		EXEC SQL FETCH CURS1_5000 INTO
 			:hv_rowid,
@@ -320,17 +297,15 @@ int cmsraudt0003_list_SELECT ()
 			:hv_dbnno, 			:hv_cstmr_name,		:hv_mbdb_name,	:hv_fnsdt,
 			:hv_first_acadt,	:hv_dbtr_rltname,	:hv_del_yn,		:hv_trscp_dbnno;
             
-		if (SQLCODE == SQL_NO_DATA) {
+		if (sqlca.sqlcode == 1403) {
 			break;
-        } else if (SQLCODE != SQL_OK) {
-			printf ("cmsraudt0001_list_SELECT_5000_SQL_ERR(MSRAUDT01MT_fetch) : [%d][%s][%s][%s]\n"
-								, SQLCODE, SQLERRM, hv_dbnno.arr, hv_cstno.arr);
-			fprintf(out,"cmsraudt0001_list_SELECT_5000_SQL_ERR(MSRAUDT01MT_fetch) : [%d][%s][%s][%s]\n"
-								, SQLCODE, SQLERRM, hv_dbnno.arr, hv_cstno.arr);
+		} else if (sqlca.sqlcode != 0) {
+			printf ("MSRAUDT01MT_fetch SQL_ERR : [%d][%s][%s][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr, hv_cstno.arr);
+			fprintf (out,"MSRAUDT01MT_fetch SQL_ERR : [%d][%s][%s][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr, hv_cstno.arr);
 			EXEC SQL CLOSE CURS1_5000;
             EXEC SQL ROLLBACK;
 			return FAILURE;
-        }
+		}
 
         if (jj < 10) {
             printf("%d 진행중....\n", jj);
@@ -338,517 +313,419 @@ int cmsraudt0003_list_SELECT ()
 
 		l_tot_cnt++;
         if (l_tot_cnt % 100 == 0) {
-			CHRINIT(buf); common_gettime(buf,":");
-			printf ("cmsraudt0001_list_SELECT_5000=========>%6d건 진행..[%s]\n",l_tot_cnt,buf);
-			fprintf (out,"cmsraudt0001_list_SELECT_5000=========>%6d건 진행..[%s]\n",l_tot_cnt,buf);
-        }
+			CHRINIT(buf); common_gettime(buf, ":");
+			printf ("cmsraudt0003_list_SELECT=========>%6ld건 진행..[%s]\n", l_tot_cnt, buf);
+			fprintf (out, "cmsraudt0003_list_SELECT=========>%6ld건 진행..[%s]\n", l_tot_cnt, buf);
+		}
 
-
-        /*
-        <LOGIC>
-        - 아래의 수임안내 발송일 추출은 해당 채권, 혹은 해당 채권의 전환 이전 채권을 대상으로 한다.
-        - 추심을 위한 채권카드 화면에서 발송 및 영업일 경과 여부를 체크하는것은 해당 채권 수임일자 이후 최초 발송일자를 대상으로한다.
-        - 따라서 이를 위한 발송일도 채번하려한다.
-        - VCHINIT, 변수 및 배열 선언, sqlcode 대응 부탁
-        </LOGIC>
-        */
-        VCHINIT(hv_card_post_sndng_date);
-        VCHINIT(hv_card_sndng_dbnno);
-
+        /* 채권카드 화면 기준 발송일 및 기준일 추출 */
+        /* <LOGIC> 없으면 NULL이 나오길 원하셨으므로 NVL 제거 및 hv_card_stndy 칼럼 셀렉트 추가 */
         EXEC SQL
-            SELECT
-                NVL(POST_SNDNG_DATE, ' '), NVL(DBNNO, ' ')
-            INTO
-                :hv_card_post_sndng_date,
-                :hv_card_sndng_dbnno
-            FROM
-                (
-                SELECT
-                    POST_SNDNG_DATE, STNDY, DBNNO
-                FROM
-                    MSRURSN01MT A
-                WHERE
-                    A.DATA_STTCD = '1'
-                AND TRSCP_DVSCD = :hv_trscp_dvscd
-                AND CSTNO = :hv_cstno
-                AND STNDY >= :hv_first_acadt
-                AND INSTR_STGCD = '01'
-                AND POST_SNDNG_DATE IS NOT NULL
-                ORDER BY
-                    POST_SNDNG_DATE ASC
-                )
-            WHERE
-                ROWNUM = 1 
-        ;
+            SELECT POST_SNDNG_DATE, DBNNO, STNDY
+            INTO   :hv_card_post_sndng_date, :hv_card_sndng_dbnno, :hv_card_stndy
+            FROM (
+                SELECT POST_SNDNG_DATE, DBNNO, STNDY
+                FROM   MSRURSN01MT A
+                WHERE  A.DATA_STTCD = '1'
+                AND    A.TRSCP_DVSCD = :hv_trscp_dvscd
+                AND    A.CSTNO = :hv_cstno
+                AND    A.STNDY >= :hv_first_acadt
+                AND    A.INSTR_STGCD = '01'
+                AND    A.POST_SNDNG_DATE IS NOT NULL
+                ORDER BY A.POST_SNDNG_DATE ASC
+            )
+            WHERE ROWNUM = 1;
 
-        if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-            printf("MSRURSN01MT (CARD_SNDNG) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
-            fprintf(out, "MSRURSN01MT (CARD_SNDNG) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+        if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+            printf("MSRURSN01MT (CARD_SNDNG) ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
+            fprintf(out, "MSRURSN01MT (CARD_SNDNG) ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
             EXEC SQL CLOSE CURS1_5000;
             EXEC SQL ROLLBACK;
             return FAILURE;
         }
 
-        /* <TO-BE> */
-        /*
-        <LOGIC>
-        [컴파일 에러 대응 및 윈도우 함수 제거]
-        Pro*C 하위 버전에서는 인라인 뷰 내에서 분석 함수 (ROW_NUMBER() OVER) 사용 시 파싱 에러(Compilation Error)가 발생할 수 있습니다.
-        이를 해결하기 위해, 인라인 뷰 내부에서 `ORDER BY`를 사용하고 바깥쪽 쿼리에서 `WHERE ROWNUM = 1`로 첫 번째 행만 추출하는 
-        표준 정적 SQL 형태로 모두 변경하였습니다.
-        또한, ORA-01405(NULL fetch) 방지를 위해 MIN 함수에 NVL 처리를 보강하였습니다.
-        </LOGIC>
-        */
-        VCHINIT(hv_old_dbnno);
-        VCHINIT(hv_old_first_acadt);
-
-		if (strcmp(hv_dbntr_ctgcd.arr, "SKT") == 0) {
-			if (strcmp(hv_sgnas_code.arr, "A3") == 0 ||
-                strcmp(hv_sgnas_code.arr, "") == 0) {
+        if (strcmp(hv_dbntr_ctgcd.arr, "SKT") == 0) {
+			if (strcmp(hv_sgnas_code.arr, "A3") == 0 || strcmp(hv_sgnas_code.arr, "") == 0) {
 				/* 특수채권 처리 (A3) */
-                
-                /*
-                <LOGIC>
-                - 채권 중 가장 오래된 수임채권 정보를 가져온다.
-                - 아래에 SQLCODE 대응 로직 추가 필요
-                </LOGIC>
-                */
                 EXEC SQL
-                    SELECT
-                        DBNNO,
-                        ACPAP_DATE
-                    INTO
-                        :hv_old_dbnno,
-                        :hv_old_first_acadt
-                    FROM
-                        (
-                        SELECT
-                            DBNNO,
-                            ACPAP_DATE 
-                        FROM MSRACCP01MT 
-                        WHERE DATA_STTCD = '1' 
-                        AND CMISS_DVSCD != 'A3' 
-                        AND SRVC_MNGNO = :hv_trscp_dbnno
+                    SELECT DBNNO, ACPAP_DATE
+                    INTO   :hv_old_dbnno, :hv_old_first_acadt
+                    FROM (
+                        SELECT DBNNO, ACPAP_DATE 
+                        FROM   MSRACCP01MT 
+                        WHERE  DATA_STTCD = '1' 
+                        AND    CMISS_DVSCD != 'A3' 
+                        AND    SRVC_MNGNO = :hv_trscp_dbnno
                         UNION ALL
                         SELECT :hv_dbnno DBNNO, :hv_first_acadt ACPAP_DATE FROM DUAL
-                        ORDER BY ACPAP_DATE
-                        )
-                    WHERE
-                        ROWNUM = 1
-                ;
+                        ORDER BY ACPAP_DATE ASC
+                    )
+                    WHERE ROWNUM = 1;
 
-                if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                    printf("MSRACCP01MT SELECT ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
-                    fprintf(out, "MSRACCP01MT SELECT ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                    printf("MSRACCP01MT SELECT ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
+                    fprintf(out, "MSRACCP01MT SELECT ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
                     EXEC SQL CLOSE CURS1_5000;
                     EXEC SQL ROLLBACK;
                     return FAILURE;
                 }
 
-                /*
-                <LOGIC>
-                - if 절 안에서만 초기화하여 이전에 담겨있는 값을 update 치는 현상 발생.
-                </LOGIC>
-                */
                 i_ck_cnt = 0;
-                VCHINIT(hv_cnslt_date);
-                VCHINIT(hv_cnslt_gubn);
-                VCHINIT(hv_recv_emid);
-                VCHINIT(hv_cnslt_cntnt);
-                VCHINIT(hv_recv_emid_name);
-                VCHINIT(hv_rgytr_rgino);
-
-                
                 EXEC SQL            
                     SELECT COUNT(*), MIN(CNSLT_DATE)
-                    INTO :i_ck_cnt, :hv_cnslt_date
-                    FROM MSRCSPR01MT A
-                    WHERE TRSCP_DVSCD = :hv_trscp_dvscd
-                      AND NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
-                      AND A.DBNNO IN (
-                          SELECT DBNNO 
-                          FROM MSRACCP01MT 
-                          WHERE DATA_STTCD = '1' 
-                            AND CMISS_DVSCD != 'A3' 
-                            AND SRVC_MNGNO = :hv_trscp_dbnno
-                          UNION ALL
-                          SELECT :hv_dbnno FROM DUAL
-                      )
-                      AND A.DATA_STTCD = '1'
-                      AND A.AZTN_DVSCD IN ('B3','B4','B1','C1','C2','C3','B5')
-                      AND NOT ( 
-                          A.AZTN_DVSCD IN ('B4', 'B3')
-                          AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
-                              (A.TRSCP_DVSCD not in ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
-                              (A.TRSCP_DVSCD in ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
-                          AND A.PRMAM = 0)
-                      AND RTRN_CODE IS NULL
-                      AND NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%');
+                    INTO   :i_ck_cnt, :hv_cnslt_date
+                    FROM   MSRCSPR01MT A
+                    WHERE  TRSCP_DVSCD = :hv_trscp_dvscd
+                    AND    NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
+                    AND    A.DBNNO IN (
+                              SELECT DBNNO FROM MSRACCP01MT 
+                              WHERE  DATA_STTCD = '1' AND CMISS_DVSCD != 'A3' AND SRVC_MNGNO = :hv_trscp_dbnno
+                              UNION ALL
+                              SELECT :hv_dbnno FROM DUAL
+                           )
+                    AND    A.DATA_STTCD = '1'
+                    AND    A.AZTN_DVSCD IN ('B3','B4','B1','C1','C2','C3','B5')
+                    AND    NOT (A.AZTN_DVSCD IN ('B4', 'B3')
+                                AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
+                                     (A.TRSCP_DVSCD NOT IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
+                                     (A.TRSCP_DVSCD IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
+                                AND A.PRMAM = 0)
+                    AND    RTRN_CODE IS NULL
+                    AND    NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%%');
 
-                if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                    printf("MSRCSPR01MT COUNT/MIN ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
-                    fprintf(out, "MSRCSPR01MT COUNT/MIN ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                    printf("MSRCSPR01MT COUNT/MIN ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
+                    fprintf(out, "MSRCSPR01MT COUNT/MIN ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
                     EXEC SQL CLOSE CURS1_5000;
                     EXEC SQL ROLLBACK;
                     return FAILURE;
                 }
 
                 if (i_ck_cnt > 0) {
-
-                    /* 윈도우 함수(ROW_NUMBER) 대신 ORDER BY + ROWNUM = 1 로 우회 */
                     EXEC SQL
-                        SELECT CNSLT_GUBN, PRINC_EMINO, SUBSTR(CNSLT_CNTNT, 1, 400)
-                        INTO :hv_cnslt_gubn, :hv_recv_emid, :hv_cnslt_cntnt
+                        SELECT CNSLT_GUBN, PRINC_EMINO, NVL(SUBSTR(CNSLT_CNTNT, 1, 400), null)
+                        INTO   :hv_cnslt_gubn, :hv_recv_emid, :hv_cnslt_cntnt
                         FROM (
-                            SELECT 
-                                CASE 
-                                    WHEN AZTN_DVSCD IN ('B3','B4') THEN 'DM' 
-                                    WHEN AZTN_DVSCD IN ('B1','C1','C2','C3') THEN '전화' 
-                                    WHEN AZTN_DVSCD IN ('B5') THEN 'SMS' 
-                                    ELSE '기타' 
-                                END CNSLT_GUBN,
-                                PRINC_EMINO, 
-                                NVL(CNSLT_CNTNT, ' ') CNSLT_CNTNT
-                            FROM MSRCSPR01MT A
-                            WHERE TRSCP_DVSCD = :hv_trscp_dvscd
-                              AND NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
-                              AND A.DBNNO IN (
-                                  SELECT DBNNO 
-                                  FROM MSRACCP01MT 
-                                  WHERE DATA_STTCD = '1' 
-                                    AND CMISS_DVSCD != 'A3' 
-                                    AND SRVC_MNGNO = :hv_trscp_dbnno
-                                  UNION ALL
-                                  SELECT :hv_dbnno FROM DUAL
-                              )
-                              AND A.DATA_STTCD = '1'
-                              AND A.AZTN_DVSCD IN ('B3', 'B4', 'B1', 'C1', 'C2', 'C3', 'B5')
-                              AND NOT (
-                                  A.AZTN_DVSCD IN ('B4', 'B3')
-                                  AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
-                                      (A.TRSCP_DVSCD not in ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
-                                      (A.TRSCP_DVSCD in ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
-                                  AND A.PRMAM = 0)
-                              AND RTRN_CODE IS NULL
-                              AND NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%')
+                            SELECT CASE WHEN AZTN_DVSCD IN ('B3','B4') THEN 'DM' 
+                                        WHEN AZTN_DVSCD IN ('B1','C1','C2','C3') THEN '전화' 
+                                        WHEN AZTN_DVSCD IN ('B5') THEN 'SMS' 
+                                        ELSE '기타' 
+                                   END CNSLT_GUBN,
+                                   PRINC_EMINO, 
+                                   CNSLT_CNTNT
+                            FROM   MSRCSPR01MT A
+                            WHERE  TRSCP_DVSCD = :hv_trscp_dvscd
+                            AND    NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
+                            AND    A.DBNNO IN (
+                                      SELECT DBNNO FROM MSRACCP01MT 
+                                      WHERE  DATA_STTCD = '1' AND CMISS_DVSCD != 'A3' AND SRVC_MNGNO = :hv_trscp_dbnno
+                                      UNION ALL
+                                      SELECT :hv_dbnno FROM DUAL
+                                   )
+                            AND    A.DATA_STTCD = '1'
+                            AND    A.AZTN_DVSCD IN ('B3', 'B4', 'B1', 'C1', 'C2', 'C3', 'B5')
+                            AND    NOT (A.AZTN_DVSCD IN ('B4', 'B3')
+                                        AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
+                                             (A.TRSCP_DVSCD NOT IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
+                                             (A.TRSCP_DVSCD IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
+                                        AND A.PRMAM = 0)
+                            AND    RTRN_CODE IS NULL
+                            AND    NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%%')
                             ORDER BY CNSLT_DATE ASC, FIRST_RGSDM ASC
                         )
                         WHERE ROWNUM = 1;
 
-                    if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                        printf("MSRCSPR01MT ROWNUM=1 ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
-                        EXEC SQL CLOSE CURS1_5000;
-                        EXEC SQL ROLLBACK;
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MSRCSPR01MT ROWNUM=1 ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        EXEC SQL CLOSE CURS1_5000; 
+                        EXEC SQL ROLLBACK; 
                         return FAILURE;
                     }
 
-                    VCHINIT(hv_recv_emid_name);
                     EXEC SQL
                         SELECT EMPLY_KRNNM INTO :hv_recv_emid_name
-                        FROM MHREMPL01MT WHERE EMINO = :hv_recv_emid;
-
-                    if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                        printf("MHREMPL01MT ERROR [%d][%s]\n", SQLCODE, SQLERRM);
+                        FROM   MHREMPL01MT WHERE EMINO = :hv_recv_emid;
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MHREMPL01MT ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                         EXEC SQL CLOSE CURS1_5000; return FAILURE;
                     }
 
-                    VCHINIT(hv_rgytr_rgino);
                     EXEC SQL
                         SELECT TRIM(SUBSTR(RGYTR_RGINO,1,12)) INTO :hv_rgytr_rgino
-                        FROM MHREMPL09MT WHERE EMINO = :hv_recv_emid;
-
-                    if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                        printf("MHREMPL09MT ERROR [%d][%s]\n", SQLCODE, SQLERRM);
+                        FROM   MHREMPL09MT WHERE EMINO = :hv_recv_emid;
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MHREMPL09MT ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                         EXEC SQL CLOSE CURS1_5000; return FAILURE;
                     }
                 }
 
-                VCHINIT(hv_sndng_date);
-                VCHINIT(hv_stndy);
-                VCHINIT(hv_sndng_dbnno);
-                
                 EXEC SQL
-                    SELECT DBNNO, NVL(POST_SNDNG_DATE, ' '), NVL(STNDY, ' ')
-                    INTO :hv_sndng_dbnno, :hv_sndng_date, :hv_stndy
+                    SELECT DBNNO, POST_SNDNG_DATE, STNDY
+                    INTO   :hv_sndng_dbnno, :hv_sndng_date, :hv_stndy
                     FROM (	
                         SELECT DBNNO, POST_SNDNG_DATE, STNDY
-                        FROM MSRURSN01MT
-                        WHERE TRSCP_DVSCD = :hv_trscp_dvscd
-                          AND CSTNO = :hv_cstno
-                          AND DBNNO IN (
-                              SELECT DBNNO 
-                              FROM MSRACCP01MT 
-                              WHERE DATA_STTCD = '1' 
-                                AND CMISS_DVSCD != 'A3' 
-                                AND SRVC_MNGNO = :hv_trscp_dbnno
-                              UNION ALL
-                              SELECT :hv_dbnno FROM DUAL
-                          )
-                          AND INSTR_STGCD = '01'
+                        FROM   MSRURSN01MT
+                        WHERE  TRSCP_DVSCD = :hv_trscp_dvscd
+                        AND    CSTNO = :hv_cstno
+                        AND    DBNNO IN (
+                                  SELECT DBNNO FROM MSRACCP01MT 
+                                  WHERE  DATA_STTCD = '1' AND CMISS_DVSCD != 'A3' AND SRVC_MNGNO = :hv_trscp_dbnno
+                                  UNION ALL
+                                  SELECT :hv_dbnno FROM DUAL
+                               )
+                        AND    INSTR_STGCD = '01'
+                        AND    POST_SNDNG_DATE IS NOT NULL
                         ORDER BY FIRST_RGSDM ASC
                     )
                     WHERE ROWNUM = 1;
 
-                if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                    printf("MSRURSN01MT ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
-                    EXEC SQL CLOSE CURS1_5000;
-                    EXEC SQL ROLLBACK;
-                    return FAILURE;
+                if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                    printf("MSRURSN01MT ERROR [%d][%s] DBNNO:[%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc, hv_dbnno.arr);
+                    EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
                 }
 
-
-                /*
-                <LOGIC>
-                - 전환 이전, 현재 채권 다 수임안내문 보낸 이력이 미발견됨.
-                - 저 두 채권의 동일 수임일자의 동일 채무자 채권 존재시 하나만 보냈을 수 있음.
-                - 따라서 수임안내문을 보낸 그 채권을 찾아야 함.
-                - SQLCODE, VCHINIT 등 작성 요망
-                </LOGIC>
-                */
-                if (strcmp(hv_sndng_date.arr, "") == 0) {
-
+                if (strcmp(hv_sndng_date.arr, "") == 0 || hv_sndng_date.len == 0) {
                     EXEC SQL
-                        SELECT
-                            -- 없으면 비우고, 있으면 아래 양식으로
-                            DECODE(MIN(UR.POST_SNDNG_DATE), NULL, NULL,
-                                MIN('발송일: '||UR.POST_SNDNG_DATE||' 발송채권번호: '||UR.DBNNO||' 동일수임일자채권번호'||AC1.DBNNO))
-                        INTO
-                            :hv_bigo_03
-                        FROM
-                            MSRACCP01MT AC1,
-                            MSRACCP02MT AC2,
-                            MSRURSN01MT UR
-                        WHERE
-                            AC1.DATA_STTCD = '1'
-                            -- 전환 이전/이후 채권 리스트
-                            AND AC1.DBNNO IN 
-                                (
-                                SELECT DBNNO 
-                                FROM MSRACCP01MT 
-                                WHERE DATA_STTCD = '1' 
-                                    AND CMISS_DVSCD != 'A3' 
-                                    AND SRVC_MNGNO = :hv_trscp_dbnno
-                                UNION ALL
-                                SELECT :hv_dbnno FROM DUAL
-                                )
-                            AND AC2.DATA_STTCD = '1'
-                            AND AC2.CSTNO = AC1.CSTNO -- 동일 채무자의
-                            AND AC2.ACPAP_DATE = AC1.ACPAP_DATE -- 동일 수임일자의
-                            AND UR.DATA_STTCD = '1'
-                            AND UR.POST_SNDNG_DATE IS NOT NULL
-                            AND UR.INSTR_STGCD = '01' -- 수임안내문
-                            AND UR.DBNNO = AC2.DBNNO -- 동일채무자의 동일수임일자의 모든 채권들로
-                            AND UR.CSTNO = :hv_cstno -- ACCP의 채무자가 아니라 위의 CSTNO로
-                    ;
+                        SELECT NVL(DECODE(MIN(UR.POST_SNDNG_DATE), NULL, ' ',
+                                   MIN('출력일: '||UR.STNDY||'발송일: '||UR.POST_SNDNG_DATE||' 발송채권번호: '||UR.DBNNO||
+                                        DECODE(AC2.ACPAP_DATE, AC1.ACPAP_DATE, ' 동일수임일자채권번호: ', ' (수임일자상이 '||AC2.ACPAP_DATE||')채권번호: ')||AC1.DBNNO)), null),
+                               MIN(UR.POST_SNDNG_DATE),
+                               MIN(UR.STNDY)
+                        INTO   :hv_bigo_03, :hv_bigo_03_dt, :hv_bigo_03_stndy
+                        FROM   MSRACCP01MT AC1, MSRACCP01MT AC2, MSRURSN01MT UR
+                        WHERE  AC1.DATA_STTCD = '1'
+                        AND    AC1.DBNNO IN (
+                                  SELECT DBNNO FROM MSRACCP01MT 
+                                  WHERE  DATA_STTCD = '1' AND CMISS_DVSCD != 'A3' AND SRVC_MNGNO = :hv_trscp_dbnno
+                                  UNION ALL
+                                  SELECT :hv_dbnno FROM DUAL
+                               )
+                        AND    AC2.DATA_STTCD = '1'
+                        AND    AC2.CSTNO = AC1.CSTNO
+                        AND    ABS(TO_DATE(AC2.ACPAP_DATE, 'YYYYMMDD') - TO_DATE(AC1.ACPAP_DATE, 'YYYYMMDD')) <= 7
+                        AND    UR.DATA_STTCD = '1'
+                        AND    UR.POST_SNDNG_DATE IS NOT NULL
+                        AND    UR.INSTR_STGCD = '01'
+                        AND    UR.DBNNO = AC2.DBNNO
+                        AND    UR.CSTNO = :hv_cstno;
 
-
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MSRACCP/UR BIGO_03 ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
+                    }
                 }
 
+                if ((strcmp(hv_bigo_03.arr, "") == 0 || hv_bigo_03.len == 0) &&
+                    (strcmp(hv_card_post_sndng_date.arr, "") == 0 || hv_card_post_sndng_date.len == 0)) {
+                    EXEC SQL
+                        SELECT STNDY, NVL(POST_SNDNG_DATE, CSPR_POST_SNDNG_DATE, NULL)
+                        INTO   :hv_bigo_02_stndy, :hv_bigo_02_dt
+                        FROM (
+                            SELECT REGEXP_SUBSTR(CS.CNSLT_CNTNT, '[0-9]{8}', 1, 1) CSPR_POST_SNDNG_DATE,
+                                   UR.POST_SNDNG_DATE,
+                                   UR.STNDY STNDY
+                            FROM   MSRCSPR01MT CS, MSRURSN01MT UR
+                            WHERE  CS.CSTNO = :hv_cstno 
+                            AND    CS.CNSLT_DATE >= :hv_first_acadt
+                            AND    CS.TRSCP_DVSCD = '0901'
+                            AND    CS.AZTN_RSLCD ='D1'
+                            AND    CS.AZTN_DVSCD IN ('B3','B4')
+                            AND    CS.FIRST_DPRTM = '009'
+                            AND    CS.CNSLT_CNTNT LIKE '%수임안내%'
+                            AND    CS.DATA_STTCD = '1'
+                            AND    CS.DBNNO = UR.DBNNO(+)
+                            AND    CS.CSTNO = UR.CSTNO(+)
+                            AND    UR.INSTR_STGCD(+) = '01'
+                            AND    UR.DATA_STTCD(+) = '1'
+                            ORDER BY UR.STNDY ASC
+                        )
+                        WHERE ROWNUM = 1;
 
-
-
-
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MSRCSPR01MT BIGO_02_DT ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        fprintf(out, "MSRCSPR01MT BIGO_02_DT ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
+                    }
+                }
 			} else {
                 /* 일반 SKT 채권 처리 */
-                /*
-                <LOGIC>
-                - if 절 안에서만 초기화하여 이전에 담겨있는 값을 update 치는 현상 발생.
-                </LOGIC>
-                */
                 i_ck_cnt = 0;
-                VCHINIT(hv_cnslt_date);
-                VCHINIT(hv_cnslt_gubn);
-                VCHINIT(hv_recv_emid);
-                VCHINIT(hv_cnslt_cntnt);
-                VCHINIT(hv_recv_emid_name);
-                VCHINIT(hv_rgytr_rgino);
-                
                 EXEC SQL            
                     SELECT COUNT(*), MIN(CNSLT_DATE)
-                    INTO :i_ck_cnt, :hv_cnslt_date
-                    FROM MSRCSPR01MT A
-                    WHERE TRSCP_DVSCD = :hv_trscp_dvscd
-                      AND NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
-                      AND A.DBNNO = :hv_dbnno
-                      AND A.DATA_STTCD = '1'
-                      AND A.AZTN_DVSCD IN ('B3','B4','B1','C1','C2','C3','B5')
-                      AND NOT ( 
-                          A.AZTN_DVSCD IN ('B4', 'B3')
-                          AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
-                              (A.TRSCP_DVSCD not in ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
-                              (A.TRSCP_DVSCD in ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
-                          AND A.PRMAM = 0)
-                      AND RTRN_CODE IS NULL
-                      AND NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%');
+                    INTO   :i_ck_cnt, :hv_cnslt_date
+                    FROM   MSRCSPR01MT A
+                    WHERE  TRSCP_DVSCD = :hv_trscp_dvscd
+                    AND    NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
+                    AND    A.DBNNO = :hv_dbnno
+                    AND    A.DATA_STTCD = '1'
+                    AND    A.AZTN_DVSCD IN ('B3','B4','B1','C1','C2','C3','B5')
+                    AND    NOT (A.AZTN_DVSCD IN ('B4', 'B3')
+                                AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
+                                     (A.TRSCP_DVSCD NOT IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
+                                     (A.TRSCP_DVSCD IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
+                                AND A.PRMAM = 0)
+                    AND    RTRN_CODE IS NULL
+                    AND    NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%%');
 
-                if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                    printf("MSRCSPR01MT COUNT/MIN (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                    printf("MSRCSPR01MT COUNT/MIN (Normal) ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                     EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
                 }
 
                 if (i_ck_cnt > 0) {
-
-                    /* 윈도우 함수 제거 후 ORDER BY + ROWNUM=1 로 수정 */
                     EXEC SQL
-                        SELECT CNSLT_GUBN, PRINC_EMINO, SUBSTR(CNSLT_CNTNT, 1, 400)
-                        INTO :hv_cnslt_gubn, :hv_recv_emid, :hv_cnslt_cntnt
+                        SELECT CNSLT_GUBN, PRINC_EMINO, NVL(SUBSTR(CNSLT_CNTNT, 1, 400), null)
+                        INTO   :hv_cnslt_gubn, :hv_recv_emid, :hv_cnslt_cntnt
                         FROM (
-                            SELECT 
-                                CASE 
-                                    WHEN AZTN_DVSCD IN ('B3','B4') THEN 'DM' 
-                                    WHEN AZTN_DVSCD IN ('B1','C1','C2','C3') THEN '전화' 
-                                    WHEN AZTN_DVSCD IN ('B5') THEN 'SMS' 
-                                    ELSE '기타' 
-                                END CNSLT_GUBN,
-                                PRINC_EMINO, 
-                                NVL(CNSLT_CNTNT, ' ') CNSLT_CNTNT
-                            FROM MSRCSPR01MT A
-                            WHERE TRSCP_DVSCD = :hv_trscp_dvscd
-                              AND NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
-                              AND A.DBNNO = :hv_dbnno
-                              AND A.DATA_STTCD = '1'
-                              AND A.AZTN_DVSCD IN ('B3', 'B4', 'B1', 'C1', 'C2', 'C3', 'B5')
-                              AND NOT ( 
-                                  A.AZTN_DVSCD IN ('B4', 'B3')
-                                  AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
-                                      (A.TRSCP_DVSCD not in ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
-                                      (A.TRSCP_DVSCD in ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
-                                  AND A.PRMAM = 0)
-                              AND RTRN_CODE IS NULL
-                              AND NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%')
+                            SELECT CASE WHEN AZTN_DVSCD IN ('B3','B4') THEN 'DM' 
+                                        WHEN AZTN_DVSCD IN ('B1','C1','C2','C3') THEN '전화' 
+                                        WHEN AZTN_DVSCD IN ('B5') THEN 'SMS' 
+                                        ELSE '기타' 
+                                   END CNSLT_GUBN,
+                                   PRINC_EMINO, 
+                                   CNSLT_CNTNT
+                            FROM   MSRCSPR01MT A
+                            WHERE  TRSCP_DVSCD = :hv_trscp_dvscd
+                            AND    NVL(GRNTR_CSTNO, CSTNO) = :hv_cstno
+                            AND    A.DBNNO = :hv_dbnno
+                            AND    A.DATA_STTCD = '1'
+                            AND    A.AZTN_DVSCD IN ('B3', 'B4', 'B1', 'C1', 'C2', 'C3', 'B5')
+                            AND    NOT (A.AZTN_DVSCD IN ('B4', 'B3')
+                                        AND ((A.TRSCP_DVSCD = '1501' AND (A.AZTN_DTLCD IN ('01','17'))) OR
+                                             (A.TRSCP_DVSCD NOT IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND (A.AZTN_DTLCD IN ('07','47'))) OR
+                                             (A.TRSCP_DVSCD IN ('0901','0902','1701','1801','1803','1804','1901','1968') AND A.AZTN_DTLCD = '01'))
+                                        AND A.PRMAM = 0)
+                            AND    RTRN_CODE IS NULL
+                            AND    NOT (AZTN_DVSCD = 'B9' AND CNSLT_CNTNT LIKE '[%%')
                             ORDER BY CNSLT_DATE ASC, FIRST_RGSDM ASC
                         )
                         WHERE ROWNUM = 1;
 
-                    if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                        printf("MSRCSPR01MT ROWNUM=1 (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MSRCSPR01MT ROWNUM=1 (Normal) ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                         EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
                     }
 
-                    VCHINIT(hv_recv_emid_name);
                     EXEC SQL
                         SELECT EMPLY_KRNNM INTO :hv_recv_emid_name
-                        FROM MHREMPL01MT WHERE EMINO = :hv_recv_emid;
-
-                    if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                        printf("MHREMPL01MT (Normal) ERROR [%d][%s]\n", SQLCODE, SQLERRM);
+                        FROM   MHREMPL01MT WHERE EMINO = :hv_recv_emid;
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MHREMPL01MT (Normal) ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                         EXEC SQL CLOSE CURS1_5000; return FAILURE;
                     }
 
-                    VCHINIT(hv_rgytr_rgino);
                     EXEC SQL
                         SELECT TRIM(SUBSTR(RGYTR_RGINO,1,12)) INTO :hv_rgytr_rgino
-                        FROM MHREMPL09MT WHERE EMINO = :hv_recv_emid;
-
-                    if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                        printf("MHREMPL09MT (Normal) ERROR [%d][%s]\n", SQLCODE, SQLERRM);
+                        FROM   MHREMPL09MT WHERE EMINO = :hv_recv_emid;
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MHREMPL09MT (Normal) ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                         EXEC SQL CLOSE CURS1_5000; return FAILURE;
                     }
                 }
 
-                VCHINIT(hv_sndng_date);
-                VCHINIT(hv_stndy);
-                VCHINIT(hv_sndng_dbnno);
-                
                 EXEC SQL
-                    SELECT DBNNO, NVL(POST_SNDNG_DATE, ' '), NVL(STNDY, ' ')
-                    INTO :hv_sndng_dbnno, :hv_sndng_date, :hv_stndy
+                    SELECT DBNNO, POST_SNDNG_DATE, STNDY
+                    INTO   :hv_sndng_dbnno, :hv_sndng_date, :hv_stndy
                     FROM (	
                         SELECT DBNNO, POST_SNDNG_DATE, STNDY
-                        FROM MSRURSN01MT
-                        WHERE TRSCP_DVSCD = :hv_trscp_dvscd
-                          AND CSTNO = :hv_cstno
-                          AND DBNNO = :hv_dbnno
-                          AND POST_SNDNG_DATE IS NOT NULL
-                          AND INSTR_STGCD = '01'
-                          AND STNDY >= :hv_first_acadt
+                        FROM   MSRURSN01MT
+                        WHERE  TRSCP_DVSCD = :hv_trscp_dvscd
+                        AND    CSTNO = :hv_cstno
+                        AND    DBNNO = :hv_dbnno
+                        AND    POST_SNDNG_DATE IS NOT NULL
+                        AND    INSTR_STGCD = '01'
+                        AND    STNDY >= :hv_first_acadt
                         ORDER BY FIRST_RGSDM ASC
                     )
                     WHERE ROWNUM = 1;
 
-                if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-                    printf("MSRURSN01MT (Normal) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+                if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                    printf("MSRURSN01MT (Normal) ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                     EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
                 }
 
-
-                /*
-                <LOGIC>
-                - 전환 이전, 현재 채권 다 수임안내문 보낸 이력이 미발견됨.
-                - 저 두 채권의 동일 수임일자의 동일 채무자 채권 존재시 하나만 보냈을 수 있음.
-                - 따라서 수임안내문을 보낸 그 채권을 찾아야 함.
-                - SQLCODE, VCHINIT 등 작성 요망
-                </LOGIC>
-                */
-                if (strcmp(hv_sndng_date.arr, "") == 0) {
-
+                if (strcmp(hv_sndng_date.arr, "") == 0 || hv_sndng_date.len == 0) {
                     EXEC SQL
-                        SELECT
-                            -- 없으면 비우고, 있으면 아래 양식으로
-                            DECODE(MIN(UR.POST_SNDNG_DATE), NULL, NULL,
-                                MIN('발송일: '||UR.POST_SNDNG_DATE||' 발송채권번호: '||UR.DBNNO||' 동일수임일자채권번호'||AC1.DBNNO))
-                        INTO
-                            :hv_bigo_03
-                        FROM
-                            MSRACCP01MT AC1,
-                            MSRACCP02MT AC2,
-                            MSRURSN01MT UR
-                        WHERE
-                            AC1.DATA_STTCD = '1'
-                            AND AC1.DBNNO = :hv_dbnno
-                            AND AC2.DATA_STTCD = '1'
-                            AND AC2.CSTNO = AC1.CSTNO -- 동일 채무자의
-                            AND AC2.ACPAP_DATE = AC1.ACPAP_DATE -- 동일 수임일자의
-                            AND UR.DATA_STTCD = '1'
-                            AND UR.POST_SNDNG_DATE IS NOT NULL
-                            AND UR.INSTR_STGCD = '01' -- 수임안내문
-                            AND UR.DBNNO = AC2.DBNNO -- 동일채무자의 동일수임일자의 모든 채권들로
-                            AND UR.CSTNO = :hv_cstno -- ACCP의 채무자가 아니라 위의 CSTNO로
-                    ;
+                        SELECT nvl(MIN(UR.POST_SNDNG_DATE),
+                                   MIN('출력일: '||UR.STNDY||'발송일: '||UR.POST_SNDNG_DATE||' 발송채권번호: '||UR.DBNNO||
+                                        DECODE(AC2.ACPAP_DATE, AC1.ACPAP_DATE, ' 동일수임일자채권번호: ', ' (수임일자상이 '||AC2.ACPAP_DATE||')채권번호: ')||AC1.DBNNO)), ' '),
+                               MIN(UR.POST_SNDNG_DATE),
+                               MIN(UR.STNDY)
+                        INTO   :hv_bigo_03, :hv_bigo_03_dt, :hv_bigo_03_stndy
+                        FROM   MSRACCP01MT AC1, MSRACCP01MT AC2, MSRURSN01MT UR
+                        WHERE  AC1.DATA_STTCD = '1'
+                        AND    AC1.DBNNO = :hv_dbnno
+                        AND    AC2.DATA_STTCD = '1'
+                        AND    AC2.CSTNO = AC1.CSTNO
+                        AND    ABS(TO_DATE(AC2.ACPAP_DATE, 'YYYYMMDD') - TO_DATE(AC1.ACPAP_DATE, 'YYYYMMDD')) <= 7
+                        AND    UR.DATA_STTCD = '1'
+                        AND    UR.POST_SNDNG_DATE IS NOT NULL
+                        AND    UR.INSTR_STGCD = '01'
+                        AND    UR.DBNNO = AC2.DBNNO
+                        AND    UR.CSTNO = :hv_cstno;
 
-
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MSRACCP/UR (Normal) BIGO_03 ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
+                    }
                 }
 
+                if ((strcmp(hv_bigo_03.arr, "") == 0 || hv_bigo_03.len == 0) &&
+                    (strcmp(hv_card_post_sndng_date.arr, "") == 0 || hv_card_post_sndng_date.len == 0)) {
+                    EXEC SQL
+                        SELECT STNDY, NVL(POST_SNDNG_DATE, CSPR_POST_SNDNG_DATE, NULL)
+                        INTO   :hv_bigo_02_stndy, :hv_bigo_02_dt
+                        FROM (
+                            SELECT REGEXP_SUBSTR(CS.CNSLT_CNTNT, '[0-9]{8}', 1, 1) CSPR_POST_SNDNG_DATE,
+                                   UR.POST_SNDNG_DATE,
+                                   UR.STNDY STNDY
+                            FROM   MSRCSPR01MT CS, MSRURSN01MT UR
+                            WHERE  CS.CSTNO = :hv_cstno 
+                            AND    CS.CNSLT_DATE >= :hv_first_acadt
+                            AND    CS.TRSCP_DVSCD = '0901'
+                            AND    CS.AZTN_RSLCD ='D1'
+                            AND    CS.AZTN_DVSCD IN ('B3','B4')
+                            AND    CS.FIRST_DPRTM = '009'
+                            AND    CS.CNSLT_CNTNT LIKE '%수임안내%'
+                            AND    CS.DATA_STTCD = '1'
+                            AND    CS.DBNNO = UR.DBNNO(+)
+                            AND    CS.CSTNO = UR.CSTNO(+)
+                            AND    UR.INSTR_STGCD(+) = '01'
+                            AND    UR.DATA_STTCD(+) = '1'
+                            ORDER BY UR.STNDY ASC
+                        )
+                        WHERE ROWNUM = 1;
+
+                    if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+                        printf("MSRCSPR01MT (Normal) BIGO_02_DT ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        fprintf(out, "MSRCSPR01MT (Normal) BIGO_02_DT ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                        EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
+                    }
+                }
             }
 		}
-/* </TO-BE> */
 
-        /*===============================================================*/
-        /* 6.미발송사유													 */
-        /*===============================================================*/
-        VCHINIT(hv_ntytf_rsn_cntnt);
+        /* 미발송사유 추출 */
         EXEC SQL			
-            SELECT NVL(replace(replace(CNSLT_CNTNT,CHR(10),''),chr(13),''), ' ')
-            INTO :hv_ntytf_rsn_cntnt
+            SELECT REPLACE(REPLACE(CNSLT_CNTNT, CHR(10), ''), CHR(13), '')
+            INTO   :hv_ntytf_rsn_cntnt
             FROM (
-                SELECT CNSLT_CNTNT
-                FROM MSRCSPR01MT
-                WHERE CSTNO = :hv_cstno
-                  AND DBNNO = :hv_dbnno
-                  AND TRSCP_DVSCD = :hv_trscp_dvscd
-                  AND CNSLT_DATE >= :hv_first_acadt
-                  AND AZTN_DVSCD = 'B9'
-                  AND DATA_STTCD = '1'
+                SELECT CNSLT_CNTNT FROM MSRCSPR01MT
+                WHERE  CSTNO = :hv_cstno AND DBNNO = :hv_dbnno AND TRSCP_DVSCD = :hv_trscp_dvscd
+                AND    CNSLT_DATE >= :hv_first_acadt AND AZTN_DVSCD = 'B9' AND DATA_STTCD = '1'
                 UNION ALL
-                SELECT CNSLT_CNTNT
-                FROM MSRCSPR01MT
-                WHERE GRNTR_CSTNO = :hv_cstno
-                  AND DBNNO = :hv_dbnno
-                  AND TRSCP_DVSCD = :hv_trscp_dvscd
-                  AND CNSLT_DATE >= :hv_first_acadt
-                  AND AZTN_DVSCD = 'B9'
-                  AND DATA_STTCD = '1'
+                SELECT CNSLT_CNTNT FROM MSRCSPR01MT
+                WHERE  GRNTR_CSTNO = :hv_cstno AND DBNNO = :hv_dbnno AND TRSCP_DVSCD = :hv_trscp_dvscd
+                AND    CNSLT_DATE >= :hv_first_acadt AND AZTN_DVSCD = 'B9' AND DATA_STTCD = '1'
             )
             WHERE ROWNUM = 1;
 
-        if (SQLCODE != SQL_OK && SQLCODE != SQL_NO_DATA) {
-            printf("MSRCSPR01MT(B9) ERROR [%d][%s] DBNNO:[%s]\n", SQLCODE, SQLERRM, hv_dbnno.arr);
+        if (sqlca.sqlcode != 0 && sqlca.sqlcode != 1403) {
+            printf("MSRCSPR01MT(B9) ERROR [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
             EXEC SQL CLOSE CURS1_5000; EXEC SQL ROLLBACK; return FAILURE;
         }
 
-        /*===============================================================*/
-        /* 7.테이블에 작성												 */
-        /*===============================================================*/
+        /* 대량 업데이트 버퍼 배열 복사 처리 */
         memset(arr_rowid[arr_idx], 0x00, 51);
         strncpy(arr_rowid[arr_idx], (char *)hv_rowid.arr, hv_rowid.len);
         
@@ -857,8 +734,8 @@ int cmsraudt0003_list_SELECT ()
         
         memset(arr_cnslt_date[arr_idx], 0x00, 10);
         strncpy(arr_cnslt_date[arr_idx], (char *)hv_cnslt_date.arr, hv_cnslt_date.len);
-
-        memset(arr_hv_stndy[arr_idx], 0x00, 10);
+        
+		memset(arr_hv_stndy[arr_idx], 0x00, 10);
         strncpy(arr_hv_stndy[arr_idx], (char *)hv_stndy.arr, hv_stndy.len);
 
         memset(arr_cnslt_gubn[arr_idx], 0x00, 25);
@@ -872,14 +749,13 @@ int cmsraudt0003_list_SELECT ()
         
         memset(arr_ntytf_rsn_cntnt[arr_idx], 0x00, 55);
         strncpy(arr_ntytf_rsn_cntnt[arr_idx], (char *)hv_ntytf_rsn_cntnt.arr, hv_ntytf_rsn_cntnt.len);
-
-        memset(arr_sndng_dbnno[arr_idx], 0x00, 15);
+        
+		memset(arr_sndng_dbnno[arr_idx], 0x00, 15);
         strncpy(arr_sndng_dbnno[arr_idx], (char *)hv_sndng_dbnno.arr, hv_sndng_dbnno.len);
 
         memset(arr_cnslt_cntnt[arr_idx], 0x00, 405);
         strncpy(arr_cnslt_cntnt[arr_idx], (char *)hv_cnslt_cntnt.arr, hv_cnslt_cntnt.len);
-
-        /* [추가] 새로운 업데이트 칼럼 3개에 대한 배열 복사 처리 */
+        
         memset(arr_sgnas_code[arr_idx], 0x00, 25);
         strncpy(arr_sgnas_code[arr_idx], (char *)hv_sgnas_code.arr, hv_sgnas_code.len);
         
@@ -888,87 +764,103 @@ int cmsraudt0003_list_SELECT ()
         
         memset(arr_old_first_acadt[arr_idx], 0x00, 10);
         strncpy(arr_old_first_acadt[arr_idx], (char *)hv_old_first_acadt.arr, hv_old_first_acadt.len);
-
-        /* [신규 추가] 채권카드 화면 기준 발송일 및 DBNNO 배열 복사 처리 */
+        
         memset(arr_card_post_sndng_date[arr_idx], 0x00, 10);
         strncpy(arr_card_post_sndng_date[arr_idx], (char *)hv_card_post_sndng_date.arr, hv_card_post_sndng_date.len);
 
         memset(arr_card_sndng_dbnno[arr_idx], 0x00, 15);
         strncpy(arr_card_sndng_dbnno[arr_idx], (char *)hv_card_sndng_dbnno.arr, hv_card_sndng_dbnno.len);
+        
+        memset(arr_card_stndy[arr_idx], 0x00, 10);     /* <LOGIC> 배열 버퍼 복사 추가 */
+        strncpy(arr_card_stndy[arr_idx], (char *)hv_card_stndy.arr, hv_card_stndy.len);
+
+        memset(arr_hv_bigo_03[arr_idx], 0x00, 405);
+        strncpy(arr_hv_bigo_03[arr_idx], (char *)hv_bigo_03.arr, hv_bigo_03.len);
+
+        memset(arr_hv_bigo_03_dt[arr_idx], 0x00, 10);
+        strncpy(arr_hv_bigo_03_dt[arr_idx], (char *)hv_bigo_03_dt.arr, hv_bigo_03_dt.len);
+
+        memset(arr_hv_bigo_03_stndy[arr_idx], 0x00, 10);
+        strncpy(arr_hv_bigo_03_stndy[arr_idx], (char *)hv_bigo_03_stndy.arr, hv_bigo_03_stndy.len);
+
+        memset(arr_hv_bigo_02_dt[arr_idx], 0x00, 10);
+        strncpy(arr_hv_bigo_02_dt[arr_idx], (char *)hv_bigo_02_dt.arr, hv_bigo_02_dt.len);
+
+        memset(arr_hv_bigo_02_stndy[arr_idx], 0x00, 10);
+        strncpy(arr_hv_bigo_02_stndy[arr_idx], (char *)hv_bigo_02_stndy.arr, hv_bigo_02_stndy.len);
 
         arr_idx++;
-
         if (arr_idx == ARRAY_SIZE) {
             h_update_cnt = arr_idx;
-            /* FOR 구문을 사용하여 5000건을 단 1번의 쿼리로 UPDATE */
+            
             EXEC SQL FOR :h_update_cnt
                 UPDATE MSRAUDT01MT
-                SET WORKDT = TO_CHAR(SYSDATE, 'YYYYMMDD'),
-                    CNSLT_DATE = :arr_cnslt_date,
-                    CNSLT_GUBN = :arr_cnslt_gubn,
-                    RECV_EMID_NAME = :arr_recv_emid_name,
-                    RGYTR_RGINO = :arr_rgytr_rgino,
-                    CNSLT_CNTNT = :arr_cnslt_cntnt,
-                    NTYTF_RSN_CNTNT = :arr_ntytf_rsn_cntnt,
-                    SGNAS_CODE = :arr_sgnas_code,
-                    -- 전환이전/후 채권들 중 최초 발송일
-                    SNDNG_DBNNO = :arr_sndng_dbnno,
-                    SNDNG_DATE = :arr_sndng_date,
-                    STNDY = :arr_hv_stndy,
-                    -- 전환 이전 채권 정보
-                    OLD_DBNNO = :arr_old_dbnno,
-                    OLD_FIRST_ACADT = :arr_old_first_acadt,
-                    -- 종합상담 인정
-                    CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
-                    CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno,
-                    -- 발송일자 못찾으면 동일 수임일자 발송내역 불러와.
-                    BIGO_03 = :arr_hv_bigo_03
-                    
-                WHERE ROWID = :arr_rowid;
-                
-            if (SQLCODE != SQL_OK) {
-                printf("MSRAUDT01MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
-                fprintf(out,"MSRCRDT03MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
+                SET    WORKDT = TO_CHAR(SYSDATE, 'YYYYMMDD'),
+                       CNSLT_DATE = :arr_cnslt_date,
+                       CNSLT_GUBN = :arr_cnslt_gubn,
+                       RECV_EMID_NAME = :arr_recv_emid_name,
+                       RGYTR_RGINO = :arr_rgytr_rgino,
+                       CNSLT_CNTNT = :arr_cnslt_cntnt,
+                       NTYTF_RSN_CNTNT = :arr_ntytf_rsn_cntnt,
+                       SGNAS_CODE = :arr_sgnas_code,
+                       SNDNG_DBNNO = :arr_sndng_dbnno,
+                       SNDNG_DATE = :arr_sndng_date,
+                       STNDY = :arr_hv_stndy,
+                       OLD_DBNNO = :arr_old_dbnno,
+                       OLD_FIRST_ACADT = :arr_old_first_acadt,
+                       CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
+                       CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno,
+                       CARD_STNDY = :arr_card_stndy,   /* <LOGIC> 업데이트 칼럼 추가 매핑 */
+                       BIGO_03 = :arr_hv_bigo_03,
+                       BIGO_03_DT = :arr_hv_bigo_03_dt,
+                       BIGO_03_STNDY = :arr_hv_bigo_03_stndy,
+                       BIGO_02 = :arr_hv_bigo_02_dt,
+                       BIGO_02_STNDY = :arr_hv_bigo_02_stndy
+                WHERE  ROWID = :arr_rowid;
+
+            if (sqlca.sqlcode != 0) {
+                printf("MSRAUDT01MT BULK UPDATE ERROR = [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+                fprintf(out, "MSRAUDT01MT BULK UPDATE ERROR = [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
                 EXEC SQL CLOSE CURS1_5000;
                 EXEC SQL ROLLBACK;
                 return FAILURE;
             }
-
             arr_idx = 0;
-            /* 업데이트 완료 후 인덱스 초기화 */
         }
-    }
+    } /* for end */
 
-    /* 남은 자투리 데이터가 있다면 마지막 일괄 UPDATE 수행 */
+	/* 남은 자투리 데이터 일괄 UPDATE 수행 */
     if (arr_idx > 0) {
         h_update_cnt = arr_idx;
+        
         EXEC SQL FOR :h_update_cnt
             UPDATE MSRAUDT01MT
-            SET WORKDT = TO_CHAR(SYSDATE, 'YYYYMMDD'),
-                CNSLT_DATE = :arr_cnslt_date,
-                CNSLT_GUBN = :arr_cnslt_gubn,
-                RECV_EMID_NAME = :arr_recv_emid_name,
-                RGYTR_RGINO = :arr_rgytr_rgino,
-                CNSLT_CNTNT = :arr_cnslt_cntnt,
-                NTYTF_RSN_CNTNT = :arr_ntytf_rsn_cntnt,
-                SGNAS_CODE = :arr_sgnas_code,
-                -- 전환이전/후 채권들 중 최초 발송일
-                SNDNG_DBNNO = :arr_sndng_dbnno,
-                SNDNG_DATE = :arr_sndng_date,
-                STNDY = :arr_hv_stndy,
-                -- 전환 이전 채권 정보
-                OLD_DBNNO = :arr_old_dbnno,
-                OLD_FIRST_ACADT = :arr_old_first_acadt,
-                -- 종합상담 인정
-                CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
-                CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno
-                -- 발송일자 못찾으면 동일 수임일자 발송내역 불러와.
-                BIGO_03 = :arr_hv_bigo_03
-            WHERE ROWID = :arr_rowid;
+            SET    WORKDT = TO_CHAR(SYSDATE, 'YYYYMMDD'),
+                   CNSLT_DATE = :arr_cnslt_date,
+                   CNSLT_GUBN = :arr_cnslt_gubn,
+                   RECV_EMID_NAME = :arr_recv_emid_name,
+                   RGYTR_RGINO = :arr_rgytr_rgino,
+                   CNSLT_CNTNT = :arr_cnslt_cntnt,
+                   NTYTF_RSN_CNTNT = :arr_ntytf_rsn_cntnt,
+                   SGNAS_CODE = :arr_sgnas_code,
+                   SNDNG_DBNNO = :arr_sndng_dbnno,
+                   SNDNG_DATE = :arr_sndng_date,
+                   STNDY = :arr_hv_stndy,
+                   OLD_DBNNO = :arr_old_dbnno,
+                   OLD_FIRST_ACADT = :arr_old_first_acadt,
+                   CARD_POST_SNDNG_DATE = :arr_card_post_sndng_date,
+                   CARD_SNDNG_DBNNO = :arr_card_sndng_dbnno,
+                   CARD_STNDY = :arr_card_stndy,   /* <LOGIC> 업데이트 칼럼 추가 매핑 */
+                   BIGO_03 = :arr_hv_bigo_03,
+                   BIGO_03_DT = :arr_hv_bigo_03_dt,
+                   BIGO_03_STNDY = :arr_hv_bigo_03_stndy,
+                   BIGO_02 = :arr_hv_bigo_02_dt,
+                   BIGO_02_STNDY = :arr_hv_bigo_02_stndy
+            WHERE  ROWID = :arr_rowid;
 
-        if (SQLCODE != SQL_OK) {
-            printf("MSRAUDT01MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
-            fprintf(out,"MSRCRDT03MT UPDATE ERROR = [%d][%s], [%s][%s][%s]\n", SQLCODE, SQLERRM, hv_rowid.arr, hv_dbnno.arr, hv_trscp_dbnno.arr);
+        if (sqlca.sqlcode != 0) {
+            printf("MSRAUDT01MT TAIL BULK UPDATE ERROR = [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
+            fprintf(out, "MSRAUDT01MT TAIL BULK UPDATE ERROR = [%d][%s]\n", sqlca.sqlcode, sqlca.sqlerrm.sqlerrmc);
             EXEC SQL CLOSE CURS1_5000;
             EXEC SQL ROLLBACK;
             return FAILURE;
@@ -979,5 +871,5 @@ int cmsraudt0003_list_SELECT ()
     return SUCCESS;
 }
 /*==========================================================================*/
-/* END OF SOURCE                               */
+/* END OF SOURCE                                                            */
 /*==========================================================================*/
